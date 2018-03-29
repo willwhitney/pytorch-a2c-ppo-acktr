@@ -115,8 +115,19 @@ def main():
 
     start = time.time()
     for j in range(num_updates):
+        if j > 200:
+            rollouts.collecting_data = True
+
+        if j == num_updates - 1:
+            rollouts.save_data()
+            actor_critic.cpu()
+            torch.save(actor_critic, "policy.pyt")
+            if args.cuda:
+                actor_critic.cuda()
+
         for step in range(args.num_steps):
             # Sample actions
+            import ipdb; ipdb.set_trace()
             value, action, action_log_prob, states = actor_critic.act(
                     Variable(rollouts.observations[step], volatile=True),
                     Variable(rollouts.states[step], volatile=True),

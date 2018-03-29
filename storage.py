@@ -1,6 +1,8 @@
 import torch
 from torch.utils.data.sampler import BatchSampler, SubsetRandomSampler
+from collections import namedtuple
 
+Transition = namedtuple('Transition', ['s0', 's1', 'a'])
 
 class RolloutStorage(object):
     def __init__(self, num_steps, num_processes, obs_shape, action_space, state_size):
@@ -18,6 +20,9 @@ class RolloutStorage(object):
         if action_space.__class__.__name__ == 'Discrete':
             self.actions = self.actions.long()
         self.masks = torch.ones(num_steps + 1, num_processes, 1)
+
+        self.collecting_data = False
+        self.dataset = []
 
     def cuda(self):
         self.observations = self.observations.cuda()
@@ -39,9 +44,21 @@ class RolloutStorage(object):
         self.masks[step + 1].copy_(mask)
 
     def after_update(self):
+        if self.collecting_data:
+            for t in range(self.observations.size(0) - 1):
+                for i in range(self.observations.size(1)):
+                    if self.masks[t][i][0] > 0:
+                        transition = Transition(self.observations[t][i],
+                                                self.observations[t+1][i],
+                                                self.actions[t][i])
+                        self.dataset.append(transition)
+
         self.observations[0].copy_(self.observations[-1])
         self.states[0].copy_(self.states[-1])
         self.masks[0].copy_(self.masks[-1])
+
+    def save_data(self):
+        torch.save(self.dataset, 'dataset.pyt')
 
     def compute_returns(self, next_value, use_gae, gamma, tau):
         if use_gae:
