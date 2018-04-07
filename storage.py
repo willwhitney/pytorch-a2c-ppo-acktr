@@ -2,7 +2,7 @@ import torch
 from torch.utils.data.sampler import BatchSampler, SubsetRandomSampler
 from collections import namedtuple
 
-Transition = namedtuple('Transition', ['s0', 's1', 'a'])
+# Transition = namedtuple('Transition', ['s0', 's1', 'a'])
 
 class RolloutStorage(object):
     def __init__(self, num_steps, num_processes, obs_shape, action_space, state_size):
@@ -48,9 +48,9 @@ class RolloutStorage(object):
             for t in range(self.observations.size(0) - 1):
                 for i in range(self.observations.size(1)):
                     if self.masks[t][i][0] > 0:
-                        transition = Transition(self.observations[t][i],
-                                                self.observations[t+1][i],
-                                                self.actions[t][i])
+                        transition = (self.observations[t][i],
+                                      self.actions[t][i],
+                                      self.observations[t+1][i])
                         self.dataset.append(transition)
 
         self.observations[0].copy_(self.observations[-1])

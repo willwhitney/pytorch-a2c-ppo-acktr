@@ -127,7 +127,6 @@ def main():
 
         for step in range(args.num_steps):
             # Sample actions
-            import ipdb; ipdb.set_trace()
             value, action, action_log_prob, states = actor_critic.act(
                     Variable(rollouts.observations[step], volatile=True),
                     Variable(rollouts.states[step], volatile=True),
