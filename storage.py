@@ -1,6 +1,5 @@
 import torch
 from torch.utils.data.sampler import BatchSampler, SubsetRandomSampler
-from collections import namedtuple
 
 # Transition = namedtuple('Transition', ['s0', 's1', 'a'])
 
@@ -43,22 +42,32 @@ class RolloutStorage(object):
         self.rewards[step].copy_(reward)
         self.masks[step + 1].copy_(mask)
 
+    def add_trajectory(self, traj):
+        self.dataset.append(traj)
+        # import ipdb; ipdb.set_trace()
+
     def after_update(self):
         if self.collecting_data:
-            for t in range(self.observations.size(0) - 1):
-                for i in range(self.observations.size(1)):
+            for i in range(self.observations.size(1)):
+                states = []
+                actions = []
+                for t in range(self.observations.size(0) - 1):
                     if self.masks[t][i][0] > 0:
-                        transition = (self.observations[t][i],
-                                      self.actions[t][i],
-                                      self.observations[t+1][i])
-                        self.dataset.append(transition)
-
+                        states.append(self.observations[t][i])
+                        actions.append(self.actions[t][i])
+                    else:
+                        states.append(self.observations[t+1][i])
+                        break
+                if len(states) > 1:
+                    states = torch.stack(states).cpu()
+                    actions = torch.stack(actions).cpu()
+                    self.add_trajectory((states, actions))
         self.observations[0].copy_(self.observations[-1])
         self.states[0].copy_(self.states[-1])
         self.masks[0].copy_(self.masks[-1])
 
-    def save_data(self):
-        torch.save(self.dataset, 'dataset.pyt')
+    def save_data(self, ob_rms):
+        torch.save((self.dataset, ob_rms), 'dataset.pyt')
 
     def compute_returns(self, next_value, use_gae, gamma, tau):
         if use_gae:

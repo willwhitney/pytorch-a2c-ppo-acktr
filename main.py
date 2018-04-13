@@ -41,6 +41,17 @@ except OSError:
     for f in files:
         os.remove(f)
 
+def save_checkpoint(actor_critic, envs):
+    # A really ugly way to save a model to CPU
+    save_model = actor_critic
+    if args.cuda:
+        save_model = copy.deepcopy(actor_critic).cpu()
+
+    save_model = [save_model,
+                    hasattr(envs, 'ob_rms') and envs.ob_rms or None]
+
+    torch.save(save_model, args.env_name + "_agent.pt")
+
 
 def main():
     print("#######")
@@ -54,7 +65,7 @@ def main():
         viz = Visdom(port=args.port)
         win = None
 
-    envs = [make_env(args.env_name, args.seed, i, args.log_dir)
+    envs = [make_env(args.env_name, args.seed, i, args.log_dir, args.repeat)
                 for i in range(args.num_processes)]
 
     if args.num_processes > 1:
@@ -115,13 +126,12 @@ def main():
 
     start = time.time()
     for j in range(num_updates):
-        if j > 200:
+        if j > args.collect_after and args.collect:
             rollouts.collecting_data = True
 
-        if j == num_updates - 1:
-            rollouts.save_data()
-            actor_critic.cpu()
-            torch.save(actor_critic, "policy.pyt")
+        if j == num_updates - 1 and args.collect:
+            rollouts.save_data(envs.ob_rms)
+            # save_checkpoint(actor_critic, envs)
             if args.cuda:
                 actor_critic.cuda()
 
@@ -270,7 +280,8 @@ def main():
         if args.vis and j % args.vis_interval == 0:
             try:
                 # Sometimes monitor doesn't properly flush the outputs
-                win = visdom_plot(viz, win, args.log_dir, args.env_name,
+                win = visdom_plot(viz, win, args.log_dir,
+                                  args.env_name + " skip" + str(args.repeat),
                                   args.algo, args.num_frames)
             except IOError:
                 pass
