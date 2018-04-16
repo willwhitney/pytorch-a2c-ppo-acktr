@@ -21,6 +21,8 @@ from model import CNNPolicy, MLPPolicy
 from storage import RolloutStorage
 from visualize import visdom_plot
 
+import ipdb
+
 args = get_args()
 
 assert args.algo in ['a2c', 'ppo', 'acktr']
@@ -135,6 +137,9 @@ def main():
             if args.cuda:
                 actor_critic.cuda()
 
+        ipdb.set_trace()
+        # last_point = envs.
+
         for step in range(args.num_steps):
             # Sample actions
             value, action, action_log_prob, states = actor_critic.act(
@@ -164,6 +169,8 @@ def main():
 
             update_current_obs(obs)
             rollouts.insert(step, current_obs, states.data, action.data, action_log_prob.data, value.data, reward, masks)
+
+            rollouts.add_data()
 
         next_value = actor_critic(Variable(rollouts.observations[-1], volatile=True),
                                   Variable(rollouts.states[-1], volatile=True),

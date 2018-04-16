@@ -22,6 +22,7 @@ class RolloutStorage(object):
 
         self.collecting_data = False
         self.dataset = []
+        self.current_traj = [[], []]
 
     def cuda(self):
         self.observations = self.observations.cuda()
@@ -44,7 +45,10 @@ class RolloutStorage(object):
 
     def add_trajectory(self, traj):
         self.dataset.append(traj)
-        # import ipdb; ipdb.set_trace()
+
+    def add_data(self, state, action):
+        # self.current_traj
+        pass
 
     def after_update(self):
         if self.collecting_data:
