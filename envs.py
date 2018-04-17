@@ -3,6 +3,8 @@ import numpy as np
 
 import gym
 from gym.spaces.box import Box
+from gym.envs.registration import register
+import gym.envs.mujoco
 
 from baselines import bench
 from baselines.common.atari_wrappers import make_atari, wrap_deepmind
@@ -85,3 +87,15 @@ class RepeatEnv(gym.Wrapper):
 
     def reset(self, **kwargs):
         return self.env.reset(**kwargs)
+
+class VisibleHopperEnv(gym.envs.mujoco.HopperEnv):
+    def _get_obs(self):
+        return np.concatenate([
+            self.sim.data.qpos.flat,
+            np.clip(self.sim.data.qvel.flat, -10, 10)
+        ])
+
+register(
+    id='VisibleHopper-v2',
+    entry_point='envs:VisibleHopperEnv',
+)
