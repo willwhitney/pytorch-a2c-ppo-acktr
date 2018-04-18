@@ -1,5 +1,6 @@
 import os
 import numpy as np
+import ipdb
 
 import gym
 from gym.spaces.box import Box
@@ -90,6 +91,7 @@ class RepeatEnv(gym.Wrapper):
 
 class VisibleHopperEnv(gym.envs.mujoco.HopperEnv):
     def _get_obs(self):
+        # ipdb.set_trace()
         return np.concatenate([
             self.sim.data.qpos.flat,
             np.clip(self.sim.data.qvel.flat, -10, 10)

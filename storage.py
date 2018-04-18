@@ -1,6 +1,6 @@
 import torch
 from torch.utils.data.sampler import BatchSampler, SubsetRandomSampler
-
+import ipdb
 # Transition = namedtuple('Transition', ['s0', 's1', 'a'])
 
 class RolloutStorage(object):
@@ -35,6 +35,7 @@ class RolloutStorage(object):
         self.masks = self.masks.cuda()
 
     def insert(self, step, current_obs, state, action, action_log_prob, value_pred, reward, mask):
+        # ipdb.set_trace()
         self.observations[step + 1].copy_(current_obs)
         self.states[step + 1].copy_(state)
         self.actions[step].copy_(action)
@@ -43,7 +44,9 @@ class RolloutStorage(object):
         self.rewards[step].copy_(reward)
         self.masks[step + 1].copy_(mask)
 
+    # traj is of the form (states, actions)
     def add_trajectory(self, traj):
+        # print("States: {}, Actions: {}".format(traj[0].size(), traj[1].size()))
         self.dataset.append(traj)
 
     def add_data(self, state, action):
