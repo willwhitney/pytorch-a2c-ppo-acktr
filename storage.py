@@ -73,8 +73,8 @@ class RolloutStorage(object):
         self.states[0].copy_(self.states[-1])
         self.masks[0].copy_(self.masks[-1])
 
-    def save_data(self, ob_rms):
-        torch.save((self.dataset, ob_rms), 'dataset.pyt')
+    def save_data(self):
+        torch.save(self.dataset, 'dataset.pyt')
 
     def compute_returns(self, next_value, use_gae, gamma, tau):
         if use_gae:

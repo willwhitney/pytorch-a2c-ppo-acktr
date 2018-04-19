@@ -37,7 +37,8 @@ def make_env(env_id, seed, rank, log_dir, repeat):
         env = RepeatEnv(env, skip=repeat)
 
         if log_dir is not None:
-            env = bench.Monitor(env, os.path.join(log_dir, str(rank)))
+            env = bench.Monitor(env, os.path.join(log_dir, str(rank)),
+                                allow_early_resets=True)
         if is_atari:
             env = wrap_deepmind(env)
         # If the input has shape (W,H,3), wrap for PyTorch convolutions
@@ -91,11 +92,31 @@ class RepeatEnv(gym.Wrapper):
 
 class VisibleHopperEnv(gym.envs.mujoco.HopperEnv):
     def _get_obs(self):
-        # ipdb.set_trace()
+        # import pdb; pdb.set_trace()
         return np.concatenate([
             self.sim.data.qpos.flat,
             np.clip(self.sim.data.qvel.flat, -10, 10)
         ])
+
+    # def step(self, a):
+    #     posbefore = self.sim.data.qpos[0]
+    #     self.do_simulation(a, self.frame_skip)
+    #     posafter, height, ang = self.sim.data.qpos[0:3]
+    #     alive_bonus = 1.0
+    #     reward = (posafter - posbefore) / self.dt
+    #     reward += alive_bonus
+    #     reward -= 1e-3 * np.square(a).sum()
+    #     # reward_components = np.array([abs((posafter - posbefore) / self.dt),
+    #     #                               alive_bonus,
+    #     #                               1e-3 * np.square(a).sum()])
+    #     # print(list(reward_components / reward_components.sum()))
+    #     s = self.state_vector()
+    #     done = not (np.isfinite(s).all() and (np.abs(s[2:]) < 100).all() and
+    #                 (height > .7) and (abs(ang) < .2))
+    #     ob = self._get_obs()
+    #     # if reward > 1.5:
+    #     #     import pdb; pdb.set_trace()
+    #     return ob, reward, done, {}
 
 register(
     id='VisibleHopper-v2',

@@ -75,8 +75,8 @@ def main():
     else:
         envs = DummyVecEnv(envs)
 
-    if len(envs.observation_space.shape) == 1:
-        envs = VecNormalize(envs)
+    # if len(envs.observation_space.shape) == 1:
+        # envs = VecNormalize(envs)
 
     obs_shape = envs.observation_space.shape
     obs_shape = (obs_shape[0] * args.num_stack, *obs_shape[1:])
@@ -126,13 +126,14 @@ def main():
         current_obs = current_obs.cuda()
         rollouts.cuda()
 
+    last_obs = None
     start = time.time()
     for j in range(num_updates):
         if j > args.collect_after and args.collect:
             rollouts.collecting_data = True
 
         if j == num_updates - 1 and args.collect:
-            rollouts.save_data(envs.ob_rms)
+            rollouts.save_data()
             # save_checkpoint(actor_critic, envs)
             if args.cuda:
                 actor_critic.cuda()
@@ -159,6 +160,10 @@ def main():
             final_rewards *= masks
             final_rewards += (1 - masks) * episode_rewards
             episode_rewards *= masks
+            # for index, done_ in enumerate(done):
+            #     if done_:# and final_rewards[index][0] > 2000:
+            #         # import pdb; pdb.set_trace()
+            #         print(last_obs[index, 0], final_rewards[index][0])
 
             if args.cuda:
                 masks = masks.cuda()
@@ -170,6 +175,7 @@ def main():
 
             update_current_obs(obs)
             rollouts.insert(step, current_obs, states.data, action.data, action_log_prob.data, value.data, reward, masks)
+            last_obs = np.array(obs)
 
         next_value = actor_critic(Variable(rollouts.observations[-1], volatile=True),
                                   Variable(rollouts.states[-1], volatile=True),
