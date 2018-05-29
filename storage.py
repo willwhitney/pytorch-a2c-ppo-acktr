@@ -46,7 +46,9 @@ class RolloutStorage(object):
 
     # traj is of the form (states, actions)
     def add_trajectory(self, traj):
-        # print("States: {}, Actions: {}".format(traj[0].size(), traj[1].size()))
+        # print("States: {}, Actions: {}, Dones: {}".format(
+        #         traj[0].size(), traj[1].size(), traj[2].size()))
+        # print(traj[2])
         self.dataset.append(traj)
 
     def add_data(self, state, action):
@@ -58,7 +60,9 @@ class RolloutStorage(object):
             for i in range(self.observations.size(1)):
                 states = []
                 actions = []
+                dones = []
                 for t in range(self.observations.size(0) - 1):
+                    dones.append(1 - self.masks[t][i][0])
                     if self.masks[t][i][0] > 0:
                         states.append(self.observations[t][i])
                         actions.append(self.actions[t][i])
@@ -68,7 +72,8 @@ class RolloutStorage(object):
                 if len(states) > 1:
                     states = torch.stack(states).cpu()
                     actions = torch.stack(actions).cpu()
-                    self.add_trajectory((states, actions))
+                    dones = torch.stack(dones).cpu()
+                    self.add_trajectory((states, actions, dones))
         self.observations[0].copy_(self.observations[-1])
         self.states[0].copy_(self.states[-1])
         self.masks[0].copy_(self.masks[-1])
