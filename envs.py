@@ -33,6 +33,7 @@ def make_env(env_id, seed, rank, log_dir, repeat):
         if is_atari:
             env = make_atari(env_id)
         env.seed(seed + rank)
+        # import ipdb; ipdb.set_trace()
 
         env = RepeatEnv(env, skip=repeat)
 
@@ -92,35 +93,16 @@ class RepeatEnv(gym.Wrapper):
 
 class VisibleHopperEnv(gym.envs.mujoco.HopperEnv):
     def _get_obs(self):
-        # import pdb; pdb.set_trace()
         return np.concatenate([
             self.sim.data.qpos.flat,
             np.clip(self.sim.data.qvel.flat, -10, 10)
         ])
 
-    # def step(self, a):
-    #     posbefore = self.sim.data.qpos[0]
-    #     self.do_simulation(a, self.frame_skip)
-    #     posafter, height, ang = self.sim.data.qpos[0:3]
-    #     alive_bonus = 1.0
-    #     reward = (posafter - posbefore) / self.dt
-    #     reward += alive_bonus
-    #     reward -= 1e-3 * np.square(a).sum()
-    #     # reward_components = np.array([abs((posafter - posbefore) / self.dt),
-    #     #                               alive_bonus,
-    #     #                               1e-3 * np.square(a).sum()])
-    #     # print(list(reward_components / reward_components.sum()))
-    #     s = self.state_vector()
-    #     done = not (np.isfinite(s).all() and (np.abs(s[2:]) < 100).all() and
-    #                 (height > .7) and (abs(ang) < .2))
-    #     ob = self._get_obs()
-    #     # if reward > 1.5:
-    #     #     import pdb; pdb.set_trace()
-    #     return ob, reward, done, {}
-
 register(
     id='VisibleHopper-v2',
     entry_point='envs:VisibleHopperEnv',
+    max_episode_steps=1000,
+    reward_threshold=3800.0,
 )
 
 class VisibleSwimmerEnv(gym.envs.mujoco.SwimmerEnv):
@@ -129,4 +111,9 @@ class VisibleSwimmerEnv(gym.envs.mujoco.SwimmerEnv):
         qvel = self.sim.data.qvel
         return np.concatenate([qpos.flat, qvel.flat])
 
-register(id='VisibleSwimmer-v2', entry_point='envs:VisibleSwimmerEnv')
+register(
+    id='VisibleSwimmer-v2',
+    entry_point='envs:VisibleSwimmerEnv',
+    max_episode_steps=1000,
+    reward_threshold=360.0,
+)
