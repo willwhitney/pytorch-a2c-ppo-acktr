@@ -122,3 +122,11 @@ register(
     id='VisibleHopper-v2',
     entry_point='envs:VisibleHopperEnv',
 )
+
+class VisibleSwimmerEnv(gym.envs.mujoco.SwimmerEnv):
+    def _get_obs(self):
+        qpos = self.sim.data.qpos
+        qvel = self.sim.data.qvel
+        return np.concatenate([qpos.flat, qvel.flat])
+
+register(id='VisibleSwimmer-v2', entry_point='envs:VisibleSwimmerEnv')
