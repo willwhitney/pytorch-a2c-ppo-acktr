@@ -62,8 +62,6 @@ class RolloutStorage(object):
                     if self.masks[t][i][0] > 0:
                         states.append(self.observations[t][i])
                         actions.append(self.actions[t][i])
-                    else:
-                        states.append(self.observations[t+1][i])
                         break
                 if len(states) > 1:
                     states = torch.stack(states).cpu()
