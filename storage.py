@@ -1,7 +1,8 @@
 import torch
 from torch.utils.data.sampler import BatchSampler, SubsetRandomSampler
-import ipdb
-# Transition = namedtuple('Transition', ['s0', 's1', 'a'])
+
+def _flatten_helper(T, N, _tensor):
+    return _tensor.view(T * N, *_tensor.size()[2:])
 
 class RolloutStorage(object):
     def __init__(self, num_steps, num_processes, obs_shape, action_space, state_size):
@@ -23,6 +24,8 @@ class RolloutStorage(object):
         self.collecting_data = False
         self.dataset = []
         self.current_traj = [[], []]
+        self.num_steps = num_steps
+        self.step = 0
 
     def cuda(self):
         self.observations = self.observations.cuda()
@@ -34,15 +37,16 @@ class RolloutStorage(object):
         self.actions = self.actions.cuda()
         self.masks = self.masks.cuda()
 
-    def insert(self, step, current_obs, state, action, action_log_prob, value_pred, reward, mask):
-        # ipdb.set_trace()
-        self.observations[step + 1].copy_(current_obs)
-        self.states[step + 1].copy_(state)
-        self.actions[step].copy_(action)
-        self.action_log_probs[step].copy_(action_log_prob)
-        self.value_preds[step].copy_(value_pred)
-        self.rewards[step].copy_(reward)
-        self.masks[step + 1].copy_(mask)
+    def insert(self, current_obs, state, action, action_log_prob, value_pred, reward, mask):
+        self.observations[self.step + 1].copy_(current_obs)
+        self.states[self.step + 1].copy_(state)
+        self.actions[self.step].copy_(action)
+        self.action_log_probs[self.step].copy_(action_log_prob)
+        self.value_preds[self.step].copy_(value_pred)
+        self.rewards[self.step].copy_(reward)
+        self.masks[self.step + 1].copy_(mask)
+
+        self.step = (self.step + 1) % self.num_steps
 
     # traj is of the form (states, actions)
     def add_trajectory(self, traj):
@@ -92,14 +96,13 @@ class RolloutStorage(object):
     def feed_forward_generator(self, advantages, num_mini_batch):
         num_steps, num_processes = self.rewards.size()[0:2]
         batch_size = num_processes * num_steps
+        assert batch_size >= num_mini_batch, (
+            f"PPO requires the number processes ({num_processes}) "
+            f"* number of steps ({num_steps}) = {num_processes * num_steps} "
+            f"to be greater than or equal to the number of PPO mini batches ({num_mini_batch}).")
         mini_batch_size = batch_size // num_mini_batch
         sampler = BatchSampler(SubsetRandomSampler(range(batch_size)), mini_batch_size, drop_last=False)
         for indices in sampler:
-            indices = torch.LongTensor(indices)
-
-            if advantages.is_cuda:
-                indices = indices.cuda()
-
             observations_batch = self.observations[:-1].view(-1,
                                         *self.observations.size()[2:])[indices]
             states_batch = self.states[:-1].view(-1, self.states.size(-1))[indices]
@@ -114,6 +117,9 @@ class RolloutStorage(object):
 
     def recurrent_generator(self, advantages, num_mini_batch):
         num_processes = self.rewards.size(1)
+        assert num_processes >= num_mini_batch, (
+            f"PPO requires the number processes ({num_processes}) "
+            f"to be greater than or equal to the number of PPO mini batches ({num_mini_batch}).")
         num_envs_per_batch = num_processes // num_mini_batch
         perm = torch.randperm(num_processes)
         for start_ind in range(0, num_processes, num_envs_per_batch):
@@ -135,13 +141,26 @@ class RolloutStorage(object):
                 old_action_log_probs_batch.append(self.action_log_probs[:, ind])
                 adv_targ.append(advantages[:, ind])
 
-            observations_batch = torch.cat(observations_batch, 0)
-            states_batch = torch.cat(states_batch, 0)
-            actions_batch = torch.cat(actions_batch, 0)
-            return_batch = torch.cat(return_batch, 0)
-            masks_batch = torch.cat(masks_batch, 0)
-            old_action_log_probs_batch = torch.cat(old_action_log_probs_batch, 0)
-            adv_targ = torch.cat(adv_targ, 0)
+            T, N = self.num_steps, num_envs_per_batch
+            # These are all tensors of size (T, N, -1)
+            observations_batch = torch.stack(observations_batch, 1)
+            actions_batch = torch.stack(actions_batch, 1)
+            return_batch = torch.stack(return_batch, 1)
+            masks_batch = torch.stack(masks_batch, 1)
+            old_action_log_probs_batch = torch.stack(old_action_log_probs_batch, 1)
+            adv_targ = torch.stack(adv_targ, 1)
+
+            # States is just a (N, -1) tensor
+            states_batch = torch.stack(states_batch, 1).view(N, -1)
+
+            # Flatten the (T, N, ...) tensors to (T * N, ...)
+            observations_batch = _flatten_helper(T, N, observations_batch)
+            actions_batch = _flatten_helper(T, N, actions_batch)
+            return_batch = _flatten_helper(T, N, return_batch)
+            masks_batch = _flatten_helper(T, N, masks_batch)
+            old_action_log_probs_batch = _flatten_helper(T, N, \
+                    old_action_log_probs_batch)
+            adv_targ = _flatten_helper(T, N, adv_targ)
 
             yield observations_batch, states_batch, actions_batch, \
                 return_batch, masks_batch, old_action_log_probs_batch, adv_targ

@@ -2,61 +2,103 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from distributions import Categorical, DiagGaussian
-from utils import orthogonal
+from utils import init, init_normc_
 
 
-def weights_init(m):
-    classname = m.__class__.__name__
-    if classname.find('Conv') != -1 or classname.find('Linear') != -1:
-        orthogonal(m.weight.data)
-        if m.bias is not None:
-            m.bias.data.fill_(0)
+class Flatten(nn.Module):
+    def forward(self, x):
+        return x.view(x.size(0), -1)
 
 
-class FFPolicy(nn.Module):
-    def __init__(self):
-        super(FFPolicy, self).__init__()
+class Policy(nn.Module):
+    def __init__(self, obs_shape, action_space, recurrent_policy):
+        super(Policy, self).__init__()
+        if len(obs_shape) == 3:
+            self.base = CNNBase(obs_shape[0], recurrent_policy)
+        elif len(obs_shape) == 1:
+            assert not recurrent_policy, \
+                "Recurrent policy is not implemented for the MLP controller"
+            self.base = MLPBase(obs_shape[0])
+        else:
+            raise NotImplementedError
+
+        if action_space.__class__.__name__ == "Discrete":
+            num_outputs = action_space.n
+            self.dist = Categorical(self.base.output_size, num_outputs)
+        elif action_space.__class__.__name__ == "Box":
+            num_outputs = action_space.shape[0]
+            self.dist = DiagGaussian(self.base.output_size, num_outputs)
+        else:
+            raise NotImplementedError
+
+        self.state_size = self.base.state_size
 
     def forward(self, inputs, states, masks):
         raise NotImplementedError
 
     def act(self, inputs, states, masks, deterministic=False):
-        value, x, states = self(inputs, states, masks)
-        action = self.dist.sample(x, deterministic=deterministic)
-        action_log_probs, dist_entropy = self.dist.logprobs_and_entropy(x, action)
+        value, actor_features, states = self.base(inputs, states, masks)
+        dist = self.dist(actor_features)
+
+        if deterministic:
+            action = dist.mode()
+        else:
+            action = dist.sample()
+
+        action_log_probs = dist.log_probs(action)
+        dist_entropy = dist.entropy().mean()
+
         return value, action, action_log_probs, states
 
-    def evaluate_actions(self, inputs, states, masks, actions):
-        value, x, states = self(inputs, states, masks)
-        action_log_probs, dist_entropy = self.dist.logprobs_and_entropy(x, actions)
+    def get_value(self, inputs, states, masks):
+        value, _, _ = self.base(inputs, states, masks)
+        return value
+
+    def evaluate_actions(self, inputs, states, masks, action):
+        value, actor_features, states = self.base(inputs, states, masks)
+        dist = self.dist(actor_features)
+
+        action_log_probs = dist.log_probs(action)
+        dist_entropy = dist.entropy().mean()
+
         return value, action_log_probs, dist_entropy, states
 
 
-class CNNPolicy(FFPolicy):
-    def __init__(self, num_inputs, action_space, use_gru):
-        super(CNNPolicy, self).__init__()
-        self.conv1 = nn.Conv2d(num_inputs, 32, 8, stride=4)
-        self.conv2 = nn.Conv2d(32, 64, 4, stride=2)
-        self.conv3 = nn.Conv2d(64, 32, 3, stride=1)
+class CNNBase(nn.Module):
+    def __init__(self, num_inputs, use_gru):
+        super(CNNBase, self).__init__()
 
-        self.linear1 = nn.Linear(32 * 7 * 7, 512)
+        init_ = lambda m: init(m,
+                      nn.init.orthogonal_,
+                      lambda x: nn.init.constant_(x, 0),
+                      nn.init.calculate_gain('relu'))
+
+        self.main = nn.Sequential(
+            init_(nn.Conv2d(num_inputs, 32, 8, stride=4)),
+            nn.ReLU(),
+            init_(nn.Conv2d(32, 64, 4, stride=2)),
+            nn.ReLU(),
+            init_(nn.Conv2d(64, 32, 3, stride=1)),
+            nn.ReLU(),
+            Flatten(),
+            init_(nn.Linear(32 * 7 * 7, 512)),
+            nn.ReLU()
+        )
 
         if use_gru:
             self.gru = nn.GRUCell(512, 512)
+            nn.init.orthogonal_(self.gru.weight_ih.data)
+            nn.init.orthogonal_(self.gru.weight_hh.data)
+            self.gru.bias_ih.data.fill_(0)
+            self.gru.bias_hh.data.fill_(0)
 
-        self.critic_linear = nn.Linear(512, 1)
+        init_ = lambda m: init(m,
+          nn.init.orthogonal_,
+          lambda x: nn.init.constant_(x, 0))
 
-        if action_space.__class__.__name__ == "Discrete":
-            num_outputs = action_space.n
-            self.dist = Categorical(512, num_outputs)
-        elif action_space.__class__.__name__ == "Box":
-            num_outputs = action_space.shape[0]
-            self.dist = DiagGaussian(512, num_outputs)
-        else:
-            raise NotImplementedError
+        self.critic_linear = init_(nn.Linear(512, 1))
 
         self.train()
-        self.reset_parameters()
 
     @property
     def state_size(self):
@@ -65,118 +107,77 @@ class CNNPolicy(FFPolicy):
         else:
             return 1
 
-    def reset_parameters(self):
-        self.apply(weights_init)
-
-        relu_gain = nn.init.calculate_gain('relu')
-        self.conv1.weight.data.mul_(relu_gain)
-        self.conv2.weight.data.mul_(relu_gain)
-        self.conv3.weight.data.mul_(relu_gain)
-        self.linear1.weight.data.mul_(relu_gain)
-
-        if hasattr(self, 'gru'):
-            orthogonal(self.gru.weight_ih.data)
-            orthogonal(self.gru.weight_hh.data)
-            self.gru.bias_ih.data.fill_(0)
-            self.gru.bias_hh.data.fill_(0)
-
-        if self.dist.__class__.__name__ == "DiagGaussian":
-            self.dist.fc_mean.weight.data.mul_(0.01)
+    @property
+    def output_size(self):
+        return 512
 
     def forward(self, inputs, states, masks):
-        x = self.conv1(inputs / 255.0)
-        x = F.relu(x)
-
-        x = self.conv2(x)
-        x = F.relu(x)
-
-        x = self.conv3(x)
-        x = F.relu(x)
-
-        x = x.view(-1, 32 * 7 * 7)
-        x = self.linear1(x)
-        x = F.relu(x)
+        x = self.main(inputs / 255.0)
 
         if hasattr(self, 'gru'):
             if inputs.size(0) == states.size(0):
                 x = states = self.gru(x, states * masks)
             else:
-                x = x.view(-1, states.size(0), x.size(1))
-                masks = masks.view(-1, states.size(0), 1)
+                # x is a (T, N, -1) tensor that has been flatten to (T * N, -1)
+                N = states.size(0)
+                T = int(x.size(0) / N)
+
+                # unflatten
+                x = x.view(T, N, x.size(1))
+
+                # Same deal with masks
+                masks = masks.view(T, N, 1)
+
                 outputs = []
-                for i in range(x.size(0)):
+                for i in range(T):
                     hx = states = self.gru(x[i], states * masks[i])
                     outputs.append(hx)
-                x = torch.cat(outputs, 0)
+
+                # assert len(outputs) == T
+                # x is a (T, N, -1) tensor
+                x = torch.stack(outputs, dim=0)
+                # flatten
+                x = x.view(T * N, -1)
+
         return self.critic_linear(x), x, states
 
 
-def weights_init_mlp(m):
-    classname = m.__class__.__name__
-    if classname.find('Linear') != -1:
-        m.weight.data.normal_(0, 1)
-        m.weight.data *= 1 / torch.sqrt(m.weight.data.pow(2).sum(1, keepdim=True))
-        if m.bias is not None:
-            m.bias.data.fill_(0)
+class MLPBase(nn.Module):
+    def __init__(self, num_inputs):
+        super(MLPBase, self).__init__()
 
+        init_ = lambda m: init(m,
+              init_normc_,
+              lambda x: nn.init.constant_(x, 0))
 
-class MLPPolicy(FFPolicy):
-    def __init__(self, num_inputs, action_space):
-        super(MLPPolicy, self).__init__()
+        self.actor = nn.Sequential(
+            init_(nn.Linear(num_inputs, 64)),
+            nn.Tanh(),
+            init_(nn.Linear(64, 64)),
+            nn.Tanh()
+        )
 
-        self.action_space = action_space
+        self.critic = nn.Sequential(
+            init_(nn.Linear(num_inputs, 64)),
+            nn.Tanh(),
+            init_(nn.Linear(64, 64)),
+            nn.Tanh()
+        )
 
-        self.a_fc1 = nn.Linear(num_inputs, 64)
-        self.a_fc2 = nn.Linear(64, 64)
-
-        self.v_fc1 = nn.Linear(num_inputs, 64)
-        self.v_fc2 = nn.Linear(64, 64)
-        self.v_fc3 = nn.Linear(64, 1)
-
-        if action_space.__class__.__name__ == "Discrete":
-            num_outputs = action_space.n
-            self.dist = Categorical(64, num_outputs)
-        elif action_space.__class__.__name__ == "Box":
-            num_outputs = action_space.shape[0]
-            self.dist = DiagGaussian(64, num_outputs)
-        else:
-            raise NotImplementedError
+        self.critic_linear = init_(nn.Linear(64, 1))
 
         self.train()
-        self.reset_parameters()
 
     @property
     def state_size(self):
         return 1
 
-    def reset_parameters(self):
-        self.apply(weights_init_mlp)
-
-        """
-        tanh_gain = nn.init.calculate_gain('tanh')
-        self.a_fc1.weight.data.mul_(tanh_gain)
-        self.a_fc2.weight.data.mul_(tanh_gain)
-        self.v_fc1.weight.data.mul_(tanh_gain)
-        self.v_fc2.weight.data.mul_(tanh_gain)
-        """
-
-        if self.dist.__class__.__name__ == "DiagGaussian":
-            self.dist.fc_mean.weight.data.mul_(0.01)
+    @property
+    def output_size(self):
+        return 64
 
     def forward(self, inputs, states, masks):
-        x = self.v_fc1(inputs)
-        x = F.tanh(x)
+        hidden_critic = self.critic(inputs)
+        hidden_actor = self.actor(inputs)
 
-        x = self.v_fc2(x)
-        x = F.tanh(x)
-
-        x = self.v_fc3(x)
-        value = x
-
-        x = self.a_fc1(inputs)
-        x = F.tanh(x)
-
-        x = self.a_fc2(x)
-        x = F.tanh(x)
-
-        return value, x, states
+        return self.critic_linear(hidden_critic), hidden_actor, states

@@ -4,11 +4,11 @@ import types
 
 import numpy as np
 import torch
-from torch.autograd import Variable
 from baselines.common.vec_env.dummy_vec_env import DummyVecEnv
 from baselines.common.vec_env.vec_normalize import VecNormalize
 
 from envs import make_env
+from utils import update_current_obs
 
 
 parser = argparse.ArgumentParser(description='RL')
@@ -22,10 +22,12 @@ parser.add_argument('--env-name', default='PongNoFrameskip-v4',
                     help='environment to train on (default: PongNoFrameskip-v4)')
 parser.add_argument('--load-dir', default='./trained_models/',
                     help='directory to save agent logs (default: ./trained_models/)')
+parser.add_argument('--add-timestep', action='store_true', default=False,
+                    help='add timestep to observations')
 args = parser.parse_args()
 
 
-env = make_env(args.env_name, args.seed, 0, None)
+env = make_env(args.env_name, args.seed, 0, None, args.add_timestep)
 env = DummyVecEnv([env])
 
 actor_critic, ob_rms = \
@@ -54,18 +56,9 @@ current_obs = torch.zeros(1, *obs_shape)
 states = torch.zeros(1, actor_critic.state_size)
 masks = torch.zeros(1, 1)
 
-
-def update_current_obs(obs):
-    shape_dim0 = env.observation_space.shape[0]
-    obs = torch.from_numpy(obs).float()
-    if args.num_stack > 1:
-        current_obs[:, :-shape_dim0] = current_obs[:, shape_dim0:]
-    current_obs[:, -shape_dim0:] = obs
-
-
 render_func('human')
 obs = env.reset()
-update_current_obs(obs)
+update_current_obs(obs, current_obs, obs_shape, args.num_stack)
 
 if args.env_name.find('Bullet') > -1:
     import pybullet as p
@@ -76,12 +69,12 @@ if args.env_name.find('Bullet') > -1:
             torsoId = i
 
 while True:
-    value, action, _, states = actor_critic.act(Variable(current_obs, volatile=True),
-                                                Variable(states, volatile=True),
-                                                Variable(masks, volatile=True),
-                                                deterministic=True)
-    states = states.data
-    cpu_actions = action.data.squeeze(1).cpu().numpy()
+    with torch.no_grad():
+        value, action, _, states = actor_critic.act(current_obs,
+                                                    states,
+                                                    masks,
+                                                    deterministic=True)
+    cpu_actions = action.squeeze(1).cpu().numpy()
     # Obser reward and next obs
     obs, reward, done, _ = env.step(cpu_actions)
 
@@ -91,7 +84,7 @@ while True:
         current_obs *= masks.unsqueeze(2).unsqueeze(2)
     else:
         current_obs *= masks
-    update_current_obs(obs)
+    update_current_obs(obs, current_obs, obs_shape, args.num_stack)
 
     if args.env_name.find('Bullet') > -1:
         if torsoId > -1:

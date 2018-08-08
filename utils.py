@@ -16,30 +16,22 @@ class AddBias(nn.Module):
 
         return x + bias
 
-# A temporary solution from the master branch.
-# https://github.com/pytorch/pytorch/blob/7752fe5d4e50052b3b0bbc9109e599f8157febc0/torch/nn/init.py#L312
-# Remove after the next version of PyTorch gets release.
-def orthogonal(tensor, gain=1):
-    if tensor.ndimension() < 2:
-        raise ValueError("Only tensors with 2 or more dimensions are supported")
 
-    rows = tensor.size(0)
-    cols = tensor[0].numel()
-    flattened = torch.Tensor(rows, cols).normal_(0, 1)
+def init(module, weight_init, bias_init, gain=1):
+    weight_init(module.weight.data, gain=gain)
+    bias_init(module.bias.data)
+    return module
 
-    if rows < cols:
-        flattened.t_()
 
-    # Compute the qr factorization
-    q, r = torch.qr(flattened)
-    # Make Q uniform according to https://arxiv.org/pdf/math-ph/0609050.pdf
-    d = torch.diag(r, 0)
-    ph = d.sign()
-    q *= ph.expand_as(q)
+# https://github.com/openai/baselines/blob/master/baselines/common/tf_util.py#L87
+def init_normc_(weight, gain=1):
+    weight.normal_(0, 1)
+    weight *= gain / torch.sqrt(weight.pow(2).sum(1, keepdim=True))
 
-    if rows < cols:
-        q.t_()
 
-    tensor.view_as(q).copy_(q)
-    tensor.mul_(gain)
-    return tensor
+def update_current_obs(obs, current_obs, obs_shape, num_stack):
+    shape_dim0 = obs_shape[0]
+    obs = torch.from_numpy(obs).float()
+    if num_stack > 1:
+        current_obs[:, :-shape_dim0] = current_obs[:, shape_dim0:]
+    current_obs[:, -shape_dim0:] = obs
