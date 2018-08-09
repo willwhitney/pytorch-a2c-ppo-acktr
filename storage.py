@@ -60,17 +60,21 @@ class RolloutStorage(object):
     def after_update(self):
         if self.collecting_data:
             for i in range(self.observations.size(1)):
+                # import ipdb; ipdb.set_trace()
                 states = []
                 actions = []
                 for t in range(self.observations.size(0) - 1):
                     if self.masks[t][i][0] > 0:
                         states.append(self.observations[t][i])
                         actions.append(self.actions[t][i])
+                    else:
+                        states.append(self.observations[t+1][i])
                         break
                 if len(states) > 1:
                     states = torch.stack(states).cpu()
                     actions = torch.stack(actions).cpu()
                     self.add_trajectory((states, actions))
+        # import ipdb; ipdb.set_trace()
         self.observations[0].copy_(self.observations[-1])
         self.states[0].copy_(self.states[-1])
         self.masks[0].copy_(self.masks[-1])
