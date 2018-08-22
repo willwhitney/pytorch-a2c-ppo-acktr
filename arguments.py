@@ -65,9 +65,11 @@ def get_args():
                         help='port to run the server on (default: 8097)')
 
     parser.add_argument('--repeat', type=int, default=1)
+    parser.add_argument('--channel-width', type=int, default=4)
     parser.add_argument('--collect', action='store_true', default=False)
     parser.add_argument('--collect-after', type=int, default=200,
                         help='start saving data after this many updates')
+    # parser.add_argument('--dataset-name')
     args = parser.parse_args()
 
     args.cuda = not args.no_cuda and torch.cuda.is_available()

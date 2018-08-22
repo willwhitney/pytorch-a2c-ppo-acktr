@@ -26,7 +26,7 @@ try:
 except ImportError:
     pass
 
-def make_env(env_id, seed, rank, log_dir, repeat, add_timestep):
+def make_env(env_id, seed, rank, log_dir, repeat, add_timestep, channel_width):
     def _thunk():
         if env_id.startswith("dm"):
             _, domain, task = env_id.split('.')
@@ -38,6 +38,9 @@ def make_env(env_id, seed, rank, log_dir, repeat, add_timestep):
         if is_atari:
             env = make_atari(env_id)
         env.seed(seed + rank)
+
+        if isinstance(env.unwrapped, TerminatingVisibleSwimmerEnv):
+            env.unwrapped.channel_width = channel_width
 
         env = RepeatEnv(env, skip=repeat)
 
@@ -137,6 +140,36 @@ class VisibleSwimmerEnv(gym.envs.mujoco.SwimmerEnv):
 register(
     id='VisibleSwimmer-v2',
     entry_point='envs:VisibleSwimmerEnv',
+    max_episode_steps=1000,
+    reward_threshold=360.0,
+)
+
+
+class TerminatingVisibleSwimmerEnv(gym.envs.mujoco.SwimmerEnv):
+    def _get_obs(self):
+        qpos = self.sim.data.qpos
+        qvel = self.sim.data.qvel
+        return np.concatenate([qpos.flat, qvel.flat])
+
+    def step(self, a):
+        ctrl_cost_coeff = 0.0001
+        xposbefore = self.sim.data.qpos[0]
+        self.do_simulation(a, self.frame_skip)
+        xposafter = self.sim.data.qpos[0]
+        reward_fwd = (xposafter - xposbefore) / self.dt
+        reward_ctrl = - ctrl_cost_coeff * np.square(a).sum()
+        reward = reward_fwd + reward_ctrl
+        ob = self._get_obs()
+        yposafter = self.sim.data.qpos[1]
+        if hasattr(self, 'channel_width'):
+            done = not (-self.channel_width/2 < yposafter < self.channel_width/2)
+        else:
+            done = False
+        return ob, reward, done, dict(reward_fwd=reward_fwd, reward_ctrl=reward_ctrl)
+
+register(
+    id='TerminatingVisibleSwimmer-v2',
+    entry_point='envs:TerminatingVisibleSwimmerEnv',
     max_episode_steps=1000,
     reward_threshold=360.0,
 )

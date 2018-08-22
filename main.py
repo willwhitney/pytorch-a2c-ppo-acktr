@@ -66,7 +66,8 @@ def main():
         viz = Visdom(port=args.port)
         win = None
 
-    envs = [make_env(args.env_name, args.seed, i, args.log_dir, args.repeat, args.add_timestep)
+    envs = [make_env(args.env_name, args.seed, i, args.log_dir, args.repeat, 
+                    args.add_timestep, args.channel_width)
                 for i in range(args.num_processes)]
 
     if args.num_processes > 1:
@@ -127,7 +128,8 @@ def main():
             rollouts.collecting_data = True
 
         if j == num_updates - 1 and args.collect:
-            rollouts.save_data()
+            savename = "{}_width{}".format(args.env_name, args.channel_width)
+            rollouts.save_data(savename)
             # save_checkpoint(actor_critic, envs)
             if args.cuda:
                 actor_critic.cuda()
