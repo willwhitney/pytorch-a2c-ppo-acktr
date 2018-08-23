@@ -12,9 +12,9 @@ import torch.optim as optim
 
 from arguments import get_args
 from baselines.common.vec_env.dummy_vec_env import DummyVecEnv
-from baselines.common.vec_env.subproc_vec_env import SubprocVecEnv
+from subproc_vec_env import SubprocVecEnv
 from baselines.common.vec_env.vec_normalize import VecNormalize
-from envs import make_env
+from envs import make_env, DatasetMaker
 from model import Policy
 from storage import RolloutStorage
 from utils import update_current_obs
@@ -67,13 +67,16 @@ def main():
         win = None
 
     envs = [make_env(args.env_name, args.seed, i, args.log_dir, args.repeat, 
-                    args.add_timestep, args.channel_width)
+                    args.add_timestep, args.channel_width, args.add_timeout)
                 for i in range(args.num_processes)]
 
     if args.num_processes > 1:
         envs = SubprocVecEnv(envs)
     else:
         envs = DummyVecEnv(envs)
+
+    if args.collect:
+        envs = DatasetMaker(envs)
 
     # if len(envs.observation_space.shape) == 1:
         # envs = VecNormalize(envs, gamma=args.gamma)
@@ -123,6 +126,7 @@ def main():
 
     last_obs = None
     start = time.time()
+    # steps_taken = 0
     for j in range(num_updates):
         if j > args.collect_after and args.collect:
             rollouts.collecting_data = True
@@ -147,13 +151,17 @@ def main():
 
             # Obser reward and next obs
             obs, reward, done, info = envs.step(cpu_actions)
-            # ipdb.set_trace()
 
             reward = torch.from_numpy(np.expand_dims(np.stack(reward), 1)).float()
             episode_rewards += reward
 
             # If done then clean the history of observations.
             masks = torch.FloatTensor([[0.0] if done_ else [1.0] for done_ in done])
+
+            # steps_taken += 1
+            # if steps_taken >= 999:
+            #     import ipdb; ipdb.set_trace()
+            
             final_rewards *= masks
             final_rewards += (1 - masks) * episode_rewards
             episode_rewards *= masks

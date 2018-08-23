@@ -57,6 +57,8 @@ def get_args():
                         help='disables CUDA training')
     parser.add_argument('--add-timestep', action='store_true', default=False,
                         help='add timestep to observations')
+    parser.add_argument('--add-timeout', action='store_true', default=False,
+                        help='add timeout indicator to observations')
     parser.add_argument('--recurrent-policy', action='store_true', default=False,
                         help='use a recurrent policy')
     parser.add_argument('--no-vis', action='store_true', default=False,

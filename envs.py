@@ -26,7 +26,7 @@ try:
 except ImportError:
     pass
 
-def make_env(env_id, seed, rank, log_dir, repeat, add_timestep, channel_width):
+def make_env(env_id, seed, rank, log_dir, repeat, add_timestep, channel_width, add_timeout):
     def _thunk():
         if env_id.startswith("dm"):
             _, domain, task = env_id.split('.')
@@ -48,6 +48,10 @@ def make_env(env_id, seed, rank, log_dir, repeat, add_timestep, channel_width):
         if add_timestep and len(
                 obs_shape) == 1 and str(env).find('TimeLimit') > -1:
             env = AddTimestep(env)
+ 
+        if add_timeout and len(
+                obs_shape) == 1 and str(env).find('TimeLimit') > -1:
+            env = AddTimeout(env)
 
         if log_dir is not None:
             env = bench.Monitor(env, os.path.join(log_dir, str(rank)))
@@ -77,6 +81,48 @@ class AddTimestep(gym.ObservationWrapper):
     def observation(self, observation):
         return np.concatenate((observation, [self.env._elapsed_steps]))
 
+class AddTimeout(gym.ObservationWrapper):
+    def __init__(self, env=None):
+        super(AddTimeout, self).__init__(env)
+        self.observation_space = Box(
+            self.observation_space.low[0],
+            self.observation_space.high[0],
+            [self.observation_space.shape[0] + 1],
+            dtype=self.observation_space.dtype)
+
+    def observation(self, observation):
+        if self.env.env._elapsed_steps >= self.env.env._max_episode_steps - 1:
+            timeout = 1
+        else:
+            timeout = 0
+        return np.concatenate((observation, [timeout]))
+
+class DatasetMaker(gym.ObservationWrapper):
+    def __init__(self, env):
+        self.env = env
+        self.action_space = self.env.action_space
+        self.observation_space = self.env.observation_space
+        # self.reward_range = self.env.reward_range
+        # self.metadata = self.env.metadata
+        self.collecting_data = False
+        self.dataset = []
+        self.current_traj = [[], []]
+        import ipdb; ipdb.set_trace()
+
+    def observation(self, observation):
+        return observation
+
+
+
+    def step(self, action):
+        observation, reward, done, info = self.env.step(action)
+        timeout = observation[:, -1]
+
+        # for i in range(observation.shape[0]):
+        #     if done[i] == 1:
+
+
+        return self.observation(observation[:, :-1]), reward, done, info
 
 class WrapPyTorch(gym.ObservationWrapper):
     def __init__(self, env=None):
