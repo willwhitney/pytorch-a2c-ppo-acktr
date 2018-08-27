@@ -112,6 +112,7 @@ def main():
     current_obs = torch.zeros(args.num_processes, *obs_shape)
 
     obs = envs.reset()
+    # import ipdb; ipdb.set_trace()
     update_current_obs(obs, current_obs, obs_shape, args.num_stack)
 
     rollouts.observations[0].copy_(current_obs)
@@ -129,11 +130,11 @@ def main():
     # steps_taken = 0
     for j in range(num_updates):
         if j > args.collect_after and args.collect:
-            rollouts.collecting_data = True
+            envs.collecting_data = True
 
         if j == num_updates - 1 and args.collect:
             savename = "{}_width{}".format(args.env_name, args.channel_width)
-            rollouts.save_data(savename)
+            envs.save_data(savename)
             # save_checkpoint(actor_critic, envs)
             if args.cuda:
                 actor_critic.cuda()

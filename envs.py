@@ -1,6 +1,7 @@
 import os
 import numpy as np
 import ipdb
+import torch
 
 import gym
 import numpy as np
@@ -91,38 +92,64 @@ class AddTimeout(gym.ObservationWrapper):
             dtype=self.observation_space.dtype)
 
     def observation(self, observation):
-        if self.env.env._elapsed_steps >= self.env.env._max_episode_steps - 1:
-            timeout = 1
-        else:
-            timeout = 0
+        # if self.env.env._elapsed_steps >= self.env.env._max_episode_steps - 1:
+        #     timeout = 1
+        # else:
+        #     timeout = 0
+        timeout = 1 if self.env.env._past_limit() else 0
         return np.concatenate((observation, [timeout]))
+
 
 class DatasetMaker(gym.ObservationWrapper):
     def __init__(self, env):
         self.env = env
         self.action_space = self.env.action_space
-        self.observation_space = self.env.observation_space
+        self.observation_space = Box(
+            self.env.observation_space.low[0],
+            self.env.observation_space.high[0],
+            [self.env.observation_space.shape[0] - 1],
+            dtype=self.env.observation_space.dtype)
         # self.reward_range = self.env.reward_range
         # self.metadata = self.env.metadata
         self.collecting_data = False
         self.dataset = []
-        self.current_traj = [[], []]
-        import ipdb; ipdb.set_trace()
+
+        # for each env, [list_of_states, list_of_actions, list_of_terms]
+        self.current_trajs = [[[], [], []] for _ in range(env.num_envs)]
+        self.dataset = []
 
     def observation(self, observation):
-        return observation
+        return observation[:, :-1]
 
-
+    def add_trajectory(self, trajectory):
+        states = torch.stack(trajectory[0])
+        actions = torch.stack(trajectory[1])
+        early_terms = torch.stack(trajectory[2])
+        self.dataset.append((states, actions, early_terms))
 
     def step(self, action):
         observation, reward, done, info = self.env.step(action)
+        if not self.collecting_data:
+            return self.observation(observation), reward, done, info
+
         timeout = observation[:, -1]
+        real_observation = observation[:, :-1]
 
-        # for i in range(observation.shape[0]):
-        #     if done[i] == 1:
+        for i in range(real_observation.shape[0]):
+            early_term = 1 if (done[i] == 1 and timeout[i] == 0) else 0
+            self.current_trajs[i][0].append(torch.from_numpy(real_observation[i]))
+            self.current_trajs[i][2].append(torch.tensor(early_term))
+            if done[i] == 1:
+                self.add_trajectory(self.current_trajs[i])
+                self.current_trajs[i] = [[], [], []]
+            else:
+                self.current_trajs[i][1].append(torch.from_numpy(action[i]))
 
+        return self.observation(observation), reward, done, info
 
-        return self.observation(observation[:, :-1]), reward, done, info
+    def save_data(self, name):
+        torch.save(self.dataset, 'dataset_{}.pyt'.format(name))
+
 
 class WrapPyTorch(gym.ObservationWrapper):
     def __init__(self, env=None):
@@ -136,6 +163,7 @@ class WrapPyTorch(gym.ObservationWrapper):
 
     def observation(self, observation):
         return observation.transpose(2, 0, 1)
+
 
 class RepeatEnv(gym.Wrapper):
     def __init__(self, env, skip=4):
