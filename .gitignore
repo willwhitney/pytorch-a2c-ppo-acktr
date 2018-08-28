@@ -103,3 +103,6 @@ venv.bak/
 trained_models/
 .fuse_hidden*
 *.pyt
+slurm_logs/
+slurm_scripts/
+results/

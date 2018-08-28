@@ -15,7 +15,8 @@ code_dir = '/private/home/willwhitney/code'
 basename = "one"
 grids = [
     {
-        "seed": [0, 1, 2, 3, 4],
+        "seed": [0],
+        # "seed": [0, 1, 2, 3, 4],
         "env-name": [
             "Hopper-v2",
             "Swimmer-v2", 
@@ -75,7 +76,7 @@ for job in jobs:
             flagstring = flagstring + " --" + flag + " " + str(job[flag])
             if flag in varying_keys:
                 jobname = jobname + "_" + flag + str(job[flag])
-    flagstring = flagstring + " --log-dir " + jobname
+    flagstring = flagstring + " --log-dir " + "results/" + jobname
 
     slurm_script_path = 'slurm_scripts/' + jobname + '.slurm'
     slurm_script_dir = os.path.dirname(slurm_script_path)
@@ -88,12 +89,14 @@ for job in jobs:
     job_source_dir = code_dir + '/pytorch-a2c-ppo-acktr-clones/' + jobname
     try:
         os.makedirs(job_source_dir)
+        os.system('cp -R algo/ ' + job_source_dir)
         os.system('cp *.py ' + job_source_dir)
     except FileExistsError:
         # with the 'clear' flag, we're starting fresh
         # overwrite the code that's already here
         if 'clear' in job and job['clear']:
-            os.system('cp --parents **.py ' + job_source_dir)
+            os.system('cp -R algo/ ' + job_source_dir)
+            os.system('cp *.py ' + job_source_dir)
 
     jobcommand = "python {}/main.py{}".format(job_source_dir, flagstring)
 

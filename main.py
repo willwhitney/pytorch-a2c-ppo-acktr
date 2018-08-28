@@ -54,7 +54,7 @@ def main():
 
     if args.vis:
         from visdom import Visdom
-        viz = Visdom(port=args.port)
+        viz = Visdom(server='http://100.97.69.42', port=args.port)
         win = None
 
     envs = [make_env(args.env_name, args.seed, i, args.log_dir, args.add_timestep)
