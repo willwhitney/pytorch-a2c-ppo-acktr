@@ -41,6 +41,7 @@ def worker(remote, parent_remote, env_fn_wrapper):
         elif cmd == 'steps':
             remote.send(steps(data))
         elif cmd == 'reset':
+            env._subproc_did_finish = False
             ob = env.reset()
             remote.send(ob)
         elif cmd == 'reset_task':
@@ -53,6 +54,7 @@ def worker(remote, parent_remote, env_fn_wrapper):
             remote.send((env.observation_space, env.action_space))
 
         elif cmd == 'set_state':
+            env._subproc_did_finish = False
             pos = data[:env.unwrapped.model.nq]
             vel = data[env.unwrapped.model.nq: 
                        env.unwrapped.model.nq + env.unwrapped.model.nv]

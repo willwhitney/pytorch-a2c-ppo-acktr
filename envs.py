@@ -55,7 +55,7 @@ def make_env(env_id, seed, rank, log_dir, repeat, add_timestep, channel_width, a
             env = AddTimeout(env)
 
         if log_dir is not None:
-            env = bench.Monitor(env, os.path.join(log_dir, str(rank)))
+            env = bench.Monitor(env, os.path.join(log_dir, str(rank)), allow_early_resets=True)
 
         if is_atari:
             env = wrap_deepmind(env)
@@ -65,6 +65,7 @@ def make_env(env_id, seed, rank, log_dir, repeat, add_timestep, channel_width, a
         if len(obs_shape) == 3 and obs_shape[2] in [1, 3]:
             env = WrapPyTorch(env)
 
+        # import ipdb; ipdb.set_trace()
         return env
 
     return _thunk
@@ -118,32 +119,53 @@ class DatasetMaker(gym.ObservationWrapper):
         self.current_trajs = [[[], [], []] for _ in range(env.num_envs)]
         self.dataset = []
 
+
     def observation(self, observation):
         return observation[:, :-1]
+
 
     def add_trajectory(self, trajectory):
         states = torch.stack(trajectory[0])
         actions = torch.stack(trajectory[1])
         early_terms = torch.stack(trajectory[2])
+
+        # predicted_state = self.predict_transition(states[0], actions[0])
+        # dataset_state = states[1].numpy()
+        # import ipdb; ipdb.set_trace()
+
         self.dataset.append((states, actions, early_terms))
+
+
+    def predict_transition(self, state, action):
+        state = torch.tensor(state)
+        action = torch.tensor(action)
+        self.unwrapped.set_state(state.unsqueeze(0).numpy())
+        return self.step(action.unsqueeze(0).numpy())[0][0]
+
 
     def step(self, action):
         observation, reward, done, info = self.env.step(action)
         if not self.collecting_data:
             return self.observation(observation), reward, done, info
 
-        timeout = observation[:, -1]
-        real_observation = observation[:, :-1]
+        timeout = np.array(observation[:, -1])
+        real_observation = np.array(observation[:, :-1])
+        # print(real_observation[0])
 
         for i in range(real_observation.shape[0]):
             early_term = 1 if (done[i] == 1 and timeout[i] == 0) else 0
             self.current_trajs[i][0].append(torch.from_numpy(real_observation[i]))
             self.current_trajs[i][2].append(torch.tensor(early_term))
+
+            # `observation` is the /result/ of `action`
+            # if this was the first observation in the trajectory, 
+            #   it's the result of a reset, not this action
+            if len(self.current_trajs[i][0]) > 1:
+                self.current_trajs[i][1].append(torch.from_numpy(action[i]))
+
             if done[i] == 1:
                 self.add_trajectory(self.current_trajs[i])
-                self.current_trajs[i] = [[], [], []]
-            else:
-                self.current_trajs[i][1].append(torch.from_numpy(action[i]))
+                self.current_trajs[i] = [[], [], []]            
 
         return self.observation(observation), reward, done, info
 
@@ -216,6 +238,38 @@ register(
     entry_point='envs:VisibleSwimmerEnv',
     max_episode_steps=1000,
     reward_threshold=360.0,
+)
+
+
+class VisibleHalfCheetahEnv(gym.envs.mujoco.HalfCheetahEnv):
+    def _get_obs(self):
+        return np.concatenate([
+            self.sim.data.qpos.flat,
+            self.sim.data.qvel.flat,
+        ])
+
+register(
+    id='VisibleHalfCheetah-v2',
+    entry_point='envs:VisibleHalfCheetahEnv',
+    max_episode_steps=1000,
+    reward_threshold=4800.0,
+)
+
+
+class VisibleAntEnv(gym.envs.mujoco.AntEnv):
+    def _get_obs(self):
+        return np.concatenate([
+            # np.array([self.get_body_com("torso")[0]]),
+            self.sim.data.qpos.flat,
+            self.sim.data.qvel.flat,
+            np.clip(self.sim.data.cfrc_ext, -1, 1).flat,
+        ])
+
+register(
+    id='VisibleAnt-v2',
+    entry_point='envs:VisibleAntEnv',
+    max_episode_steps=1000,
+    reward_threshold=6000.0,
 )
 
 

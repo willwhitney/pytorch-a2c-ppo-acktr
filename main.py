@@ -70,10 +70,11 @@ def main():
                     args.add_timestep, args.channel_width, args.add_timeout)
                 for i in range(args.num_processes)]
 
-    if args.num_processes > 1:
-        envs = SubprocVecEnv(envs)
-    else:
-        envs = DummyVecEnv(envs)
+    # if args.num_processes > 1:
+    #     envs = SubprocVecEnv(envs)
+    # else:
+    #     envs = DummyVecEnv(envs)
+    envs = SubprocVecEnv(envs)
 
     if args.collect:
         envs = DatasetMaker(envs)
@@ -133,7 +134,9 @@ def main():
             envs.collecting_data = True
 
         if j == num_updates - 1 and args.collect:
-            savename = "{}_width{}".format(args.env_name, args.channel_width)
+            savename = args.env_name
+            if args.env_name == 'TerminatingVisibleSwimmer-v2':
+                savename += "_width{}".format(args.env_name, args.channel_width)
             envs.save_data(savename)
             # save_checkpoint(actor_critic, envs)
             if args.cuda:
