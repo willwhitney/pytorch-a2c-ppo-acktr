@@ -104,3 +104,7 @@ trained_models/
 .fuse_hidden*
 
 *.pyt
+
+results/
+slurm_logs/
+slurm_scripts/

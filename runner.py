@@ -12,7 +12,7 @@ if not os.path.exists("slurm_scripts"):
 
 code_dir = '/private/home/willwhitney/code'
 
-basename = "datagen_10M_4"
+basename = "datagen_1M_4"
 grids = [
     {
         # "seed": [0],
@@ -38,7 +38,7 @@ grids = [
         "ppo-epoch": [10],
         "gamma": [0.99],
         "tau": [0.95],
-        "num-frames": [10000000],
+        "num-frames": [1000000],
         "num-stack": [1],
     },
 

@@ -137,6 +137,7 @@ def main():
             savename = args.env_name
             if args.env_name == 'TerminatingVisibleSwimmer-v2':
                 savename += "_width{}".format(args.env_name, args.channel_width)
+            savename += "_steps{}".format(args.num_frames)
             envs.save_data(savename)
             # save_checkpoint(actor_critic, envs)
             if args.cuda:
@@ -223,7 +224,8 @@ def main():
                        final_rewards.median(),
                        final_rewards.min(),
                        final_rewards.max(), dist_entropy,
-                       value_loss, action_loss))
+                       value_loss, action_loss),
+                flush=True)
         if args.vis and j % args.vis_interval == 0:
             try:
                 # Sometimes monitor doesn't properly flush the outputs
