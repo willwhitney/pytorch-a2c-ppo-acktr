@@ -22,7 +22,10 @@ from visualize import visdom_plot
 
 import algo
 
-
+import sys
+# sys.path.insert(0, '../action-embedding')
+# import gridworld.grid_world_env
+# import gridworld
 args = get_args()
 
 assert args.algo in ['a2c', 'ppo', 'acktr']
@@ -57,8 +60,26 @@ def main():
         viz = Visdom(port=args.port)
         win = None
 
-    envs = [make_env(args.env_name, args.seed, i, args.log_dir, args.add_timestep)
-                for i in range(args.num_processes)]
+    lookup = None
+    if args.action_embedding is not None:
+        lookup = torch.load(args.action_embedding)
+    # sys.path.insert(0, '../action-embedding')
+    # from nn_lookup import KnnLookup
+    # lookup = KnnLookup(
+    #         [[1, 0],
+    #          [0, 1],
+    #          [-1, 0],
+    #          [0, -1]],
+    #         [[[0,1,0,0]],
+    #          [[0,0,1,0]],
+    #          [[0,0,0,1]],
+    #          [[1,0,0,0]]])
+
+    # import ipdb; ipdb.set_trace()
+    envs = [make_env(
+                args.env_name, args.seed, i, args.log_dir,
+                args.add_timestep, lookup)
+            for i in range(args.num_processes)]
 
     if args.num_processes > 1:
         envs = SubprocVecEnv(envs)
@@ -68,6 +89,7 @@ def main():
     if len(envs.observation_space.shape) == 1:
         envs = VecNormalize(envs, gamma=args.gamma)
 
+    # import ipdb; ipdb.set_trace()
     obs_shape = envs.observation_space.shape
     obs_shape = (obs_shape[0] * args.num_stack, *obs_shape[1:])
 
@@ -111,6 +133,7 @@ def main():
 
     start = time.time()
     for j in range(num_updates):
+        actions = []
         for step in range(args.num_steps):
             # Sample actions
             with torch.no_grad():
@@ -119,6 +142,7 @@ def main():
                         rollouts.recurrent_hidden_states[step],
                         rollouts.masks[step])
 
+            actions.append(action)
             cpu_actions = action.squeeze(1).cpu().numpy()
 
             # Obser reward and next obs
@@ -141,6 +165,9 @@ def main():
 
             update_current_obs(obs, current_obs, obs_shape, args.num_stack)
             rollouts.insert(current_obs, recurrent_hidden_states, action, action_log_prob, value, reward, masks)
+
+        # mean_action = torch.cat(actions, 0).mean(0)
+        # print("({:.3f}, {:.3f})".format(mean_action[0], mean_action[1]))
 
         with torch.no_grad():
             next_value = actor_critic.get_value(rollouts.obs[-1],

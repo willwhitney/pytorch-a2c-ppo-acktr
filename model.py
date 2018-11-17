@@ -17,7 +17,10 @@ class Policy(nn.Module):
             base_kwargs = {}
 
         if len(obs_shape) == 3:
-            self.base = CNNBase(obs_shape[0], **base_kwargs)
+            # self.base = CNNBase(obs_shape[0], **base_kwargs)
+            self.base = MLPBase(
+                    obs_shape[0] * obs_shape[1] * obs_shape[2],
+                    **base_kwargs)
         elif len(obs_shape) == 1:
             self.base = MLPBase(obs_shape[0], **base_kwargs)
         else:
@@ -171,6 +174,8 @@ class MLPBase(NNBase):
     def __init__(self, num_inputs, recurrent=False, hidden_size=64):
         super(MLPBase, self).__init__(recurrent, num_inputs, hidden_size)
 
+        self.num_inputs = num_inputs
+
         if recurrent:
             num_inputs = hidden_size
 
@@ -197,7 +202,7 @@ class MLPBase(NNBase):
         self.train()
 
     def forward(self, inputs, rnn_hxs, masks):
-        x = inputs
+        x = inputs.view(-1, self.num_inputs)
 
         if self.is_recurrent:
             x, rnn_hxs = self._forward_gru(x, rnn_hxs, masks)

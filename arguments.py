@@ -49,7 +49,7 @@ def get_args():
                         help='number of frames to train (default: 10e6)')
     parser.add_argument('--env-name', default='PongNoFrameskip-v4',
                         help='environment to train on (default: PongNoFrameskip-v4)')
-    parser.add_argument('--log-dir', default='/tmp/gym/',
+    parser.add_argument('--log-dir', default='./gym_log/',
                         help='directory to save agent logs (default: /tmp/gym)')
     parser.add_argument('--save-dir', default='./trained_models/',
                         help='directory to save agent logs (default: ./trained_models/)')
@@ -63,6 +63,9 @@ def get_args():
                         help='disables visdom visualization')
     parser.add_argument('--port', type=int, default=8097,
                         help='port to run the server on (default: 8097)')
+
+    parser.add_argument('--action-embedding', default=None,
+                        help='a lookup to turn actions from embeddings to sequences')
     args = parser.parse_args()
 
     args.cuda = not args.no_cuda and torch.cuda.is_available()

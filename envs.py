@@ -1,8 +1,13 @@
 import os
+import random
+import math
 
 import gym
 import numpy as np
 from gym.spaces.box import Box
+from gym import spaces
+from gym.envs.registration import register
+from gym.wrappers.time_limit import TimeLimit
 
 from baselines import bench
 from baselines.common.atari_wrappers import make_atari, wrap_deepmind
@@ -22,14 +27,29 @@ try:
 except ImportError:
     pass
 
+import sys
+sys.path.insert(0, '../action-embedding')
+import gridworld.grid_world_env
 
-def make_env(env_id, seed, rank, log_dir, add_timestep):
+
+def make_env(env_id, seed, rank, log_dir, add_timestep, lookup=None):
     def _thunk():
+        # gridworld_steps = 800 if lookup is None else 100
+        register(
+            id='GridWorld-v0',
+            entry_point='gridworld.grid_world_env:GridWorldEnv',
+            # max_episode_steps=gridworld_steps,
+        )
+
         if env_id.startswith("dm"):
             _, domain, task = env_id.split('.')
             env = dm_control2gym.make(domain_name=domain, task_name=task)
         else:
             env = gym.make(env_id)
+
+        if 'GridWorld' in env_id:
+            env = TimeLimit(env, max_episode_steps=800)
+
         is_atari = hasattr(gym.envs, 'atari') and isinstance(
             env.unwrapped, gym.envs.atari.atari_env.AtariEnv)
         if is_atari:
@@ -41,8 +61,12 @@ def make_env(env_id, seed, rank, log_dir, add_timestep):
                 obs_shape) == 1 and str(env).find('TimeLimit') > -1:
             env = AddTimestep(env)
 
+
         if log_dir is not None:
             env = bench.Monitor(env, os.path.join(log_dir, str(rank)))
+
+        if lookup is not None:
+            env = EmbeddedAction(env, lookup)
 
         if is_atari:
             env = wrap_deepmind(env)
@@ -55,6 +79,52 @@ def make_env(env_id, seed, rank, log_dir, add_timestep):
         return env
 
     return _thunk
+
+class EmbeddedAction(gym.Wrapper):
+    def __init__(self, env, lookup):
+        """Return only every `skip`-th frame"""
+        gym.Wrapper.__init__(self, env)
+        # most recent raw observations (for max pooling across time steps)
+        self._obs_buffer = np.zeros((2,)+env.observation_space.shape, dtype=np.uint8)
+        self._lookup = lookup
+        self.low = np.stack(lookup.keys).min()
+        self.high = np.stack(lookup.keys).max()
+        self.scale = 2*max(abs(self.low), abs(self.high))
+        self.action_space = spaces.Box(
+                -1, 1, dtype=np.float32,
+                shape=(2,))
+
+    def step(self, action):
+        """Repeat action, sum reward, and max over last observations."""
+        total_reward = 0.0
+        done = None
+        result_obs = None
+
+        action = action * self.scale
+        base_actions = self._lookup[action]
+
+        # summed_actions = base_actions.sum(0)
+        # delta_x = summed_actions[1] - summed_actions[3]
+        # delta_y = summed_actions[2] - summed_actions[0]
+        # print((delta_x, delta_y))
+
+        # print(action)
+
+        for i in range(len(base_actions)):
+            # import ipdb; ipdb.set_trace()
+            action = base_actions[i]
+            action = random.choices(range(len(action)), weights=action)[0]
+            obs, reward, done, info = self.env.step(action)
+            result_obs = obs
+            total_reward += reward
+            if done:
+                break
+
+        return result_obs, total_reward, done, info
+
+    def reset(self, **kwargs):
+        return self.env.reset(**kwargs)
+
 
 
 class AddTimestep(gym.ObservationWrapper):
