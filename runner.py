@@ -12,16 +12,16 @@ if not os.path.exists("slurm_scripts"):
 
 code_dir = '/private/home/willwhitney/code'
 
-basename = "one"
+basename = "seeds"
 grids = [
     {
-        "seed": [0],
-        # "seed": [0, 1, 2, 3, 4],
+        # "seed": [0],
+        "seed": [0, 1, 2, 3, 4],
         "env-name": [
-            "Hopper-v2",
+            # "Hopper-v2",
             "Swimmer-v2", 
             "HalfCheetah-v2",
-            "Ant-v2",
+            # "Ant-v2",
         ],
 
         "algo": ["ppo"],
@@ -113,9 +113,9 @@ for job in jobs:
         slurmfile.write("#SBATCH --error=slurm_logs/" + jobname + ".err\n")
         slurmfile.write("#SBATCH --export=ALL\n")
         slurmfile.write("#SBATCH --signal=USR1@600\n")
-        # slurmfile.write("#SBATCH --time=3:00\n")
-        slurmfile.write("#SBATCH -p dev\n")
-        # slurmfile.write("#SBATCH -p uninterrupted\n")
+        slurmfile.write("#SBATCH --time=3-00\n")
+        # slurmfile.write("#SBATCH -p dev\n")
+        slurmfile.write("#SBATCH -p priority\n")
         slurmfile.write("#SBATCH -N 1\n")
         slurmfile.write("#SBATCH --mem=60gb\n")
 
