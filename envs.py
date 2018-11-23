@@ -85,14 +85,13 @@ class EmbeddedAction(gym.Wrapper):
         """Return only every `skip`-th frame"""
         gym.Wrapper.__init__(self, env)
         # most recent raw observations (for max pooling across time steps)
-        self._obs_buffer = np.zeros((2,)+env.observation_space.shape, dtype=np.uint8)
         self._lookup = lookup
         self.low = np.stack(lookup.keys).min()
         self.high = np.stack(lookup.keys).max()
-        self.scale = 2*max(abs(self.low), abs(self.high))
+        self.scale = max(abs(self.low), abs(self.high))
         self.action_space = spaces.Box(
                 -1, 1, dtype=np.float32,
-                shape=(2,))
+                shape=lookup.keys[0].shape,)
 
     def step(self, action):
         """Repeat action, sum reward, and max over last observations."""
@@ -113,8 +112,9 @@ class EmbeddedAction(gym.Wrapper):
         for i in range(len(base_actions)):
             # import ipdb; ipdb.set_trace()
             action = base_actions[i]
-            action = random.choices(range(len(action)), weights=action)[0]
-            obs, reward, done, info = self.env.step(action)
+            if isinstance(self.env.action_space, spaces.Discrete):
+                action = random.choices(range(len(action)), weights=action)[0]
+            obs, reward, done, info = self.env.step(np.array(action))
             result_obs = obs
             total_reward += reward
             if done:
