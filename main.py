@@ -60,7 +60,7 @@ def main():
 
     if args.vis:
         from visdom import Visdom
-        viz = Visdom(port=args.port)
+        viz = Visdom(server='http://100.97.69.42', port=args.port)
         win = None
 
     lookup = None
