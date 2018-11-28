@@ -76,7 +76,7 @@ for job in jobs:
             flagstring = flagstring + " --" + flag + " " + str(job[flag])
             if flag in varying_keys:
                 jobname = jobname + "_" + flag + str(job[flag])
-    flagstring = flagstring + " --log-dir " + "results/" + jobname
+    flagstring = flagstring + " --name " + jobname
 
     slurm_script_path = 'slurm_scripts/' + jobname + '.slurm'
     slurm_script_dir = os.path.dirname(slurm_script_path)
