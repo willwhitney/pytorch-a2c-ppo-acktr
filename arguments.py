@@ -66,6 +66,9 @@ def get_args():
 
     parser.add_argument('--action-embedding', default=None,
                         help='a lookup to turn actions from embeddings to sequences')
+    parser.add_argument('--real-variance', action='store_true')
+    parser.add_argument('--scale', type=float, default=1.0)
+    parser.add_argument('--name', default="default")
     args = parser.parse_args()
 
     args.cuda = not args.no_cuda and torch.cuda.is_available()

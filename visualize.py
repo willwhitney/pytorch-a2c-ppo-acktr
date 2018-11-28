@@ -101,7 +101,7 @@ color_defaults = [
 ]
 
 
-def visdom_plot(viz, win, folder, game, name, num_steps, bin_size=100, smooth=1):
+def visdom_plot(viz, win, folder, title, name, num_steps, bin_size=100, smooth=1):
     tx, ty = load_data(folder, smooth, bin_size)
     if tx is None or ty is None:
         return win
@@ -118,7 +118,7 @@ def visdom_plot(viz, win, folder, game, name, num_steps, bin_size=100, smooth=1)
     plt.xlabel('Number of Timesteps')
     plt.ylabel('Rewards')
 
-    plt.title(game)
+    plt.title(title)
     plt.legend(loc=4)
     plt.show()
     plt.draw()

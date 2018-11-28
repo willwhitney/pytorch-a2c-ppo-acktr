@@ -39,6 +39,9 @@ torch.manual_seed(args.seed)
 if args.cuda:
     torch.cuda.manual_seed(args.seed)
 
+embed_flag = "raw" if args.action_embedding is None else "embed"
+args.log_dir = os.path.join(args.log_dir, args.env_name, embed_flag, args.name)
+
 try:
     os.makedirs(args.log_dir)
 except OSError:
@@ -78,7 +81,7 @@ def main():
     # import ipdb; ipdb.set_trace()
     envs = [make_env(
                 args.env_name, args.seed, i, args.log_dir,
-                args.add_timestep, lookup)
+                args.add_timestep, lookup, args.scale)
             for i in range(args.num_processes)]
 
     if args.num_processes > 1:
@@ -93,7 +96,7 @@ def main():
     obs_shape = envs.observation_space.shape
     obs_shape = (obs_shape[0] * args.num_stack, *obs_shape[1:])
 
-    actor_critic = Policy(obs_shape, envs.action_space,
+    actor_critic = Policy(obs_shape, envs.action_space, real_variance=args.real_variance,
         base_kwargs={'recurrent': args.recurrent_policy})
     actor_critic.to(device)
 
@@ -211,7 +214,7 @@ def main():
         if args.vis and j % args.vis_interval == 0:
             try:
                 # Sometimes monitor doesn't properly flush the outputs
-                win = visdom_plot(viz, win, args.log_dir, args.env_name,
+                win = visdom_plot(viz, win, args.log_dir, args.log_dir,
                                   args.algo, args.num_frames)
             except IOError:
                 pass

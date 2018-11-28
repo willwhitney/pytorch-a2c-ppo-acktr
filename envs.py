@@ -32,7 +32,7 @@ sys.path.insert(0, '../action-embedding')
 import gridworld.grid_world_env
 
 
-def make_env(env_id, seed, rank, log_dir, add_timestep, lookup=None):
+def make_env(env_id, seed, rank, log_dir, add_timestep, lookup=None, scale=None):
     def _thunk():
         # gridworld_steps = 800 if lookup is None else 100
         register(
@@ -66,7 +66,7 @@ def make_env(env_id, seed, rank, log_dir, add_timestep, lookup=None):
             env = bench.Monitor(env, os.path.join(log_dir, str(rank)))
 
         if lookup is not None:
-            env = EmbeddedAction(env, lookup)
+            env = EmbeddedAction(env, lookup, scale)
 
         if is_atari:
             env = wrap_deepmind(env)
@@ -81,14 +81,14 @@ def make_env(env_id, seed, rank, log_dir, add_timestep, lookup=None):
     return _thunk
 
 class EmbeddedAction(gym.Wrapper):
-    def __init__(self, env, lookup):
+    def __init__(self, env, lookup, scale):
         """Return only every `skip`-th frame"""
         gym.Wrapper.__init__(self, env)
         # most recent raw observations (for max pooling across time steps)
         self._lookup = lookup
         self.low = np.stack(lookup.keys).min()
         self.high = np.stack(lookup.keys).max()
-        self.scale = max(abs(self.low), abs(self.high))
+        self.scale = scale * max(abs(self.low), abs(self.high))
         self.action_space = spaces.Box(
                 -1, 1, dtype=np.float32,
                 shape=lookup.keys[0].shape,)

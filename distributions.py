@@ -46,23 +46,33 @@ class Categorical(nn.Module):
 
 
 class DiagGaussian(nn.Module):
-    def __init__(self, num_inputs, num_outputs):
+    def __init__(self, num_inputs, num_outputs, real_variance):
         super(DiagGaussian, self).__init__()
+        self.real_variance = real_variance
+        # print("Using real variance: {}".format(self.real_variance))
 
         init_ = lambda m: init(m,
               init_normc_,
               lambda x: nn.init.constant_(x, 0))
 
         self.fc_mean = init_(nn.Linear(num_inputs, num_outputs))
-        self.logstd = AddBias(torch.zeros(num_outputs))
+
+        if self.real_variance:
+            self.logstd = init_(nn.Linear(num_inputs, num_outputs))
+        else:
+            self.logstd = AddBias(torch.zeros(num_outputs))
 
     def forward(self, x):
         action_mean = self.fc_mean(x)
 
-        #  An ugly hack for my KFAC implementation.
-        zeros = torch.zeros(action_mean.size())
-        if x.is_cuda:
-            zeros = zeros.cuda()
+        if self.real_variance:
+            action_logstd = self.logstd(x)
+        else:
+            # An ugly hack for my KFAC implementation.
+            zeros = torch.zeros(action_mean.size())
+            if x.is_cuda:
+                zeros = zeros.cuda()
+            action_logstd = self.logstd(zeros)
 
-        action_logstd = self.logstd(zeros)
+        
         return FixedNormal(action_mean, action_logstd.exp())
