@@ -4,10 +4,12 @@ import math
 
 import gym
 import numpy as np
+import numpy.random as npr
 from gym.spaces.box import Box
 from gym import spaces
 from gym.envs.registration import register
 from gym.wrappers.time_limit import TimeLimit
+import gym.envs.mujoco
 
 from baselines import bench
 from baselines.common.atari_wrappers import make_atari, wrap_deepmind
@@ -152,3 +154,54 @@ class WrapPyTorch(gym.ObservationWrapper):
 
     def observation(self, observation):
         return observation.transpose(2, 0, 1)
+
+
+class SparseReacherEnv(gym.envs.mujoco.ReacherEnv):
+    def __init__(self, *args, **kwargs):
+        self.startup = True
+        super().__init__(*args, **kwargs)
+
+    def step(self, a):
+        vec = self.get_body_com("fingertip") - self.get_body_com("target")
+        reward_dist = - np.linalg.norm(vec)
+        reward_ctrl = - np.square(a).sum()
+        # import ipdb; ipdb.set_trace()
+        reward = 100 if abs(reward_dist) < 0.01 else reward_ctrl
+        self.do_simulation(a, self.frame_skip)
+        ob = self._get_obs()
+        done = (reward > 0) and not self.startup
+        
+        self.startup = False
+        return ob, reward, done, dict(reward_dist=reward_dist, reward_ctrl=reward_ctrl)
+
+register(
+    id='SparseReacher-v2',
+    entry_point='envs:SparseReacherEnv',
+    max_episode_steps=50,
+)
+
+class SuperSparseReacherEnv(gym.envs.mujoco.ReacherEnv):
+    def __init__(self, *args, **kwargs):
+        self.startup = True
+        super().__init__(*args, **kwargs)
+
+    def step(self, a):
+        vec = self.get_body_com("fingertip") - self.get_body_com("target")
+        reward_dist = - np.linalg.norm(vec)
+        reward_ctrl = - np.square(a).sum()
+        # import ipdb; ipdb.set_trace()
+        # print(reward_dist)
+        reward = 100 if abs(reward_dist) < 0.001 else reward_ctrl
+        self.do_simulation(a, self.frame_skip)
+        ob = self._get_obs()
+        done = (reward > 0) and not self.startup
+        
+        self.startup = False
+        return ob, reward, done, dict(reward_dist=reward_dist, reward_ctrl=reward_ctrl)
+
+register(
+    id='SuperSparseReacher-v2',
+    entry_point='envs:SuperSparseReacherEnv',
+    max_episode_steps=50,
+)
+

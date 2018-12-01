@@ -1,6 +1,8 @@
 import torch
 import torch.nn as nn
 
+import copy
+import json
 
 # Necessary for my KFAC implementation.
 class AddBias(nn.Module):
@@ -35,3 +37,16 @@ def update_current_obs(obs, current_obs, obs_shape, num_stack):
     if num_stack > 1:
         current_obs[:, :-shape_dim0] = current_obs[:, shape_dim0:]
     current_obs[:, -shape_dim0:] = obs
+
+def serialize_opt(opt):
+    # import ipdb; ipdb.set_trace()
+    cleaned_opt = copy.deepcopy(vars(opt))
+    return json.dumps(cleaned_opt, indent=4, sort_keys=True)
+
+def write_options(opt, location):
+    with open(location + "/opt.json", 'w') as f:
+        serial_opt = serialize_opt(opt)
+        print(serial_opt)
+        f.write(serial_opt)
+        f.flush()
+

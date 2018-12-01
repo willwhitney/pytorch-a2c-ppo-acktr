@@ -12,32 +12,55 @@ if not os.path.exists("slurm_scripts"):
 
 code_dir = '/private/home/willwhitney/code'
 
-basename = "seeds"
+basename = "sparse_actioncost10"
 grids = [
     {
         # "seed": [0],
-        "seed": [0, 1, 2, 3, 4],
-        "env-name": [
-            # "Hopper-v2",
-            "Swimmer-v2", 
-            "HalfCheetah-v2",
-            # "Ant-v2",
-        ],
+        "env-name": ["SparseReacher-v2"],
 
         "algo": ["ppo"],
         "use-gae": [True],
-        "lr": [2.5e-4],
+        "lr": [3e-4],
         "entropy-coef": [0],
-        "num-processes": [16],
-        "num-steps": [128],
+        "num-processes": [8],
+        "num-steps": [256],
         "num-mini-batch": [32],
         "ppo-epoch": [10],
+        "clip-param": [0.2],
         "gamma": [0.99],
         "tau": [0.95],
-        "num-frames": [100000000],
+        "num-frames": [10000000],
         "num-stack": [1],
+        "action-embedding": [
+            'qpos_only_kl0.001',
+        ],
+        "real-variance": [True, False],
+        "scale": [0.01, 0.05, 0.1, 0.2],
     },
+    # {
+    #     # "seed": [0],
+    #     "env-name": ["SparseReacher-v2"],
 
+    #     "algo": ["ppo"],
+    #     "use-gae": [True],
+    #     "lr": [3e-4],
+    #     "entropy-coef": [0],
+    #     "num-processes": [8],
+    #     "num-steps": [256],
+    #     "num-mini-batch": [32],
+    #     "ppo-epoch": [10],
+    #     "clip-param": [0.2],
+    #     "gamma": [0.99],
+    #     "tau": [0.95],
+    #     "num-frames": [10000000],
+    #     "num-stack": [1],
+    #     "action-embedding": [
+    #         'embed2_kl0.01',
+    #         'embed4_traj8_kl0.01',
+    #     ],
+    #     "real-variance": [True],
+    #     "scale": [0.1, 0.2],
+    # },
 
 ]
 
@@ -114,10 +137,10 @@ for job in jobs:
         slurmfile.write("#SBATCH --export=ALL\n")
         slurmfile.write("#SBATCH --signal=USR1@600\n")
         slurmfile.write("#SBATCH --time=3-00\n")
-        # slurmfile.write("#SBATCH -p dev\n")
-        slurmfile.write("#SBATCH -p priority\n")
+        slurmfile.write("#SBATCH -p dev\n")
+        # slurmfile.write("#SBATCH -p priority\n")
         slurmfile.write("#SBATCH -N 1\n")
-        slurmfile.write("#SBATCH --mem=60gb\n")
+        slurmfile.write("#SBATCH --mem=32gb\n")
 
         slurmfile.write("#SBATCH -c 8\n")
         slurmfile.write("#SBATCH --gres=gpu:1\n")

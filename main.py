@@ -17,7 +17,7 @@ from baselines.common.vec_env.vec_normalize import VecNormalize
 from envs import make_env
 from model import Policy
 from storage import RolloutStorage
-from utils import update_current_obs
+from utils import update_current_obs, write_options
 from visualize import visdom_plot
 
 import algo
@@ -49,6 +49,7 @@ except OSError:
     for f in files:
         os.remove(f)
 
+write_options(args, args.log_dir)
 
 def main():
     print("#######")
@@ -65,7 +66,10 @@ def main():
 
     lookup = None
     if args.action_embedding is not None:
-        lookup = torch.load(args.action_embedding)
+        lookup = torch.load(
+                "../action-embedding/results/{}/{}/lookup.pt".format(
+                args.env_name.strip("Super").strip("Sparse"),
+                args.action_embedding))
     # sys.path.insert(0, '../action-embedding')
     # from nn_lookup import KnnLookup
     # lookup = KnnLookup(
