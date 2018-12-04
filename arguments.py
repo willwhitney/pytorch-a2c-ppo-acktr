@@ -67,7 +67,8 @@ def get_args():
     parser.add_argument('--action-embedding', default=None,
                         help='a lookup to turn actions from embeddings to sequences')
     parser.add_argument('--real-variance', action='store_true')
-    parser.add_argument('--scale', type=float, default=1.0)
+    parser.add_argument('--cdf', action='store_true')
+    parser.add_argument('--scale', type=float, default=0.1)
     parser.add_argument('--name', default="default")
     args = parser.parse_args()
 

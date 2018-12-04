@@ -20,9 +20,16 @@ from storage import RolloutStorage
 from utils import update_current_obs, write_options
 from visualize import visdom_plot
 
+from pointmass import point_mass
+
 import algo
 
 import sys
+
+from pyvirtualdisplay import Display
+display_ = Display(visible=0, size=(550,550))
+display_.start()
+
 # sys.path.insert(0, '../action-embedding')
 # import gridworld.grid_world_env
 # import gridworld
@@ -53,7 +60,8 @@ write_options(args, args.log_dir)
 
 def main():
     print("#######")
-    print("WARNING: All rewards are clipped or normalized so you need to use a monitor (see envs.py) or visdom plot to get true rewards")
+    print(("WARNING: All rewards are clipped or normalized so you need "
+        "to use a monitor (see envs.py) or visdom plot to get true rewards"))
     print("#######")
 
     torch.set_num_threads(1)
@@ -85,7 +93,7 @@ def main():
     # import ipdb; ipdb.set_trace()
     envs = [make_env(
                 args.env_name, args.seed, i, args.log_dir,
-                args.add_timestep, lookup, args.scale)
+                args.add_timestep, lookup, args.scale, args.cdf)
             for i in range(args.num_processes)]
 
     if args.num_processes > 1:
@@ -95,6 +103,8 @@ def main():
 
     if len(envs.observation_space.shape) == 1:
         envs = VecNormalize(envs, gamma=args.gamma)
+
+    # import ipdb; ipdb.set_trace()
 
     # import ipdb; ipdb.set_trace()
     obs_shape = envs.observation_space.shape
@@ -173,6 +183,8 @@ def main():
             update_current_obs(obs, current_obs, obs_shape, args.num_stack)
             rollouts.insert(current_obs, recurrent_hidden_states, action, action_log_prob, value, reward, masks)
 
+        actions = torch.cat(actions, 0)
+        print(actions.min().item(), actions.max().item())
         # mean_action = torch.cat(actions, 0).mean(0)
         # print("({:.3f}, {:.3f})".format(mean_action[0], mean_action[1]))
 

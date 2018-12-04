@@ -1,6 +1,7 @@
 import os
 import random
 import math
+import torch 
 
 import gym
 import numpy as np
@@ -34,7 +35,8 @@ sys.path.insert(0, '../action-embedding')
 import gridworld.grid_world_env
 
 
-def make_env(env_id, seed, rank, log_dir, add_timestep, lookup=None, scale=None):
+def make_env(env_id, seed, rank, log_dir, add_timestep, 
+        lookup=None, scale=None, cdf=False):
     def _thunk():
         # gridworld_steps = 800 if lookup is None else 100
         register(
@@ -68,7 +70,7 @@ def make_env(env_id, seed, rank, log_dir, add_timestep, lookup=None, scale=None)
             env = bench.Monitor(env, os.path.join(log_dir, str(rank)))
 
         if lookup is not None:
-            env = EmbeddedAction(env, lookup, scale)
+            env = EmbeddedAction(env, lookup, scale, cdf)
 
         if is_atari:
             env = wrap_deepmind(env)
@@ -83,7 +85,7 @@ def make_env(env_id, seed, rank, log_dir, add_timestep, lookup=None, scale=None)
     return _thunk
 
 class EmbeddedAction(gym.Wrapper):
-    def __init__(self, env, lookup, scale):
+    def __init__(self, env, lookup, scale, cdf=False):
         """Return only every `skip`-th frame"""
         gym.Wrapper.__init__(self, env)
         # most recent raw observations (for max pooling across time steps)
@@ -94,6 +96,10 @@ class EmbeddedAction(gym.Wrapper):
         self.action_space = spaces.Box(
                 -1, 1, dtype=np.float32,
                 shape=lookup.keys[0].shape,)
+        print("Keys range: [{:.3f}, {:.3f}]".format(self.low, self.high))
+        all_base_actions = torch.stack(lookup.values)
+        print("Actions range: [{:.3f}, {:.3f}]".format(
+            all_base_actions.min(), all_base_actions.max()))
 
     def step(self, action):
         """Repeat action, sum reward, and max over last observations."""
@@ -101,8 +107,14 @@ class EmbeddedAction(gym.Wrapper):
         done = None
         result_obs = None
 
-        action = action * self.scale
+        if hasattr(self._lookup, 'embedded_offset'):
+            offset = self._lookup.embedded_offset 
+        else:
+            offset = np.zeros(action.shape)
+        # import ipdb; ipdb.set_trace()
+        action = action * self.scale + offset
         base_actions = self._lookup[action]
+        # print(base_actions.min().item(), base_actions.max().item())
 
         # summed_actions = base_actions.sum(0)
         # delta_x = summed_actions[1] - summed_actions[3]

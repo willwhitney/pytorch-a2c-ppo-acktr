@@ -3,6 +3,7 @@ import torch.nn as nn
 
 import copy
 import json
+import imageio
 
 # Necessary for my KFAC implementation.
 class AddBias(nn.Module):
@@ -50,3 +51,12 @@ def write_options(opt, location):
         f.write(serial_opt)
         f.flush()
 
+def save_gif(filename, inputs, bounce=False, duration=0.2):
+    images = []
+    for tensor in inputs:
+        tensor = tensor.cpu()
+        tensor = tensor.transpose(0,1).transpose(1,2).clamp(0,1)
+        images.append(tensor.cpu().numpy())
+    if bounce:
+        images = images + list(reversed(images[1:-1]))
+    imageio.mimsave(filename, images, duration=duration)

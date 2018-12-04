@@ -12,11 +12,12 @@ if not os.path.exists("slurm_scripts"):
 
 code_dir = '/private/home/willwhitney/code'
 
-basename = "sparse_actioncost10"
+# basename = "traj2_kl0_2"
+basename = "traj2_centered_hyperparams2"
 grids = [
     {
-        # "seed": [0],
-        "env-name": ["SparseReacher-v2"],
+        # "seed": list(range(8)),
+        "env-name": ["LinearPointMass-v0"],
 
         "algo": ["ppo"],
         "use-gae": [True],
@@ -26,17 +27,49 @@ grids = [
         "num-steps": [256],
         "num-mini-batch": [32],
         "ppo-epoch": [10],
-        "clip-param": [0.2],
-        "gamma": [0.99],
-        "tau": [0.95],
+        "clip-param": [0.1],
+        # "clip-param": [0.05, 0.1, 0.2],
+        "gamma": [0.98, 0.99, 0.999, 1],
+        "tau": [0.9, 0.95, 0.98, 1],
+        # "gamma": [0.99],
+        # "tau": [0.95],
         "num-frames": [10000000],
         "num-stack": [1],
         "action-embedding": [
-            'qpos_only_kl0.001',
+            # 'traj2_seeding_dense',
+            # 'traj2_kl1e-4_dense1k',
+            # 'traj2_kl0_dense1k',
+            'traj2_kl1e-3_centered_dense1k',
         ],
-        "real-variance": [True, False],
-        "scale": [0.01, 0.05, 0.1, 0.2],
+        "real-variance": [True],
+        # "scale": [0.01, 0.03, 0.1, 0.3, 1],
+        # "scale": [0.05, 0.1, 0.2],
+        "scale": [0.1],
+        "add-timestep": [True],
     },
+    # {
+    #     # "seed": [0],
+    #     "env-name": ["SparseReacher-v2"],
+
+    #     "algo": ["ppo"],
+    #     "use-gae": [True],
+    #     "lr": [3e-4],
+    #     "entropy-coef": [0],
+    #     "num-processes": [8],
+    #     "num-steps": [256],
+    #     "num-mini-batch": [32],
+    #     "ppo-epoch": [10],
+    #     "clip-param": [0.2],
+    #     "gamma": [0.99],
+    #     "tau": [0.95],
+    #     "num-frames": [10000000],
+    #     "num-stack": [1],
+    #     "action-embedding": [
+    #         'qpos_only_kl0.001',
+    #     ],
+    #     "real-variance": [True, False],
+    #     "scale": [0.01, 0.05, 0.1, 0.2],
+    # },
     # {
     #     # "seed": [0],
     #     "env-name": ["SparseReacher-v2"],
@@ -137,7 +170,8 @@ for job in jobs:
         slurmfile.write("#SBATCH --export=ALL\n")
         slurmfile.write("#SBATCH --signal=USR1@600\n")
         slurmfile.write("#SBATCH --time=3-00\n")
-        slurmfile.write("#SBATCH -p dev\n")
+        # slurmfile.write("#SBATCH -p dev\n")
+        slurmfile.write("#SBATCH -p dev,learnfair\n")
         # slurmfile.write("#SBATCH -p priority\n")
         slurmfile.write("#SBATCH -N 1\n")
         slurmfile.write("#SBATCH --mem=32gb\n")
