@@ -2,6 +2,7 @@ import copy
 import glob
 import os
 import time
+import sys
 
 import gym
 import numpy as np
@@ -10,21 +11,20 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 
-from arguments import get_args
 from baselines.common.vec_env.dummy_vec_env import DummyVecEnv
 from baselines.common.vec_env.subproc_vec_env import SubprocVecEnv
 from baselines.common.vec_env.vec_normalize import VecNormalize
+
+from arguments import get_args
 from envs import make_env
-from model import Policy
+from model import Policy, EmbeddedPolicy
 from storage import RolloutStorage
 from utils import update_current_obs, write_options
 from visualize import visdom_plot
-
-from pointmass import point_mass
-
 import algo
 
-import sys
+from pointmass import point_mass
+from dummy_lookup import DummyLookup, SpikyDummyLookup
 
 from pyvirtualdisplay import Display
 display_ = Display(visible=0, size=(550,550))
@@ -72,28 +72,9 @@ def main():
         viz = Visdom(server='http://100.97.69.42', port=args.port)
         win = None
 
-    lookup = None
-    if args.action_embedding is not None:
-        lookup = torch.load(
-                "../action-embedding/results/{}/{}/lookup.pt".format(
-                args.env_name.strip("Super").strip("Sparse"),
-                args.action_embedding))
-    # sys.path.insert(0, '../action-embedding')
-    # from nn_lookup import KnnLookup
-    # lookup = KnnLookup(
-    #         [[1, 0],
-    #          [0, 1],
-    #          [-1, 0],
-    #          [0, -1]],
-    #         [[[0,1,0,0]],
-    #          [[0,0,1,0]],
-    #          [[0,0,0,1]],
-    #          [[1,0,0,0]]])
-
-    # import ipdb; ipdb.set_trace()
     envs = [make_env(
                 args.env_name, args.seed, i, args.log_dir,
-                args.add_timestep, lookup, args.scale, args.cdf)
+                args.add_timestep)
             for i in range(args.num_processes)]
 
     if args.num_processes > 1:
@@ -104,15 +85,42 @@ def main():
     if len(envs.observation_space.shape) == 1:
         envs = VecNormalize(envs, gamma=args.gamma)
 
-    # import ipdb; ipdb.set_trace()
-
-    # import ipdb; ipdb.set_trace()
     obs_shape = envs.observation_space.shape
     obs_shape = (obs_shape[0] * args.num_stack, *obs_shape[1:])
 
-    actor_critic = Policy(obs_shape, envs.action_space, real_variance=args.real_variance,
-        base_kwargs={'recurrent': args.recurrent_policy})
+
+    lookup = None
+    if args.dummy_embedding:
+        if args.dummy_embedding == 'spiky':
+            lookup = SpikyDummyLookup(envs.action_space, args.dummy_traj_len)
+        else:
+            lookup = DummyLookup(envs.action_space, args.dummy_traj_len)
+
+        actor_critic = EmbeddedPolicy(obs_shape, envs.action_space,
+                lookup=lookup,
+                scale=args.scale,
+                real_variance=args.real_variance,
+                base_kwargs={'recurrent': args.recurrent_policy})
+    elif args.action_embedding is not None:
+        lookup = torch.load(
+                "../action-embedding/results/{}/{}/lookup.pt".format(
+                args.env_name.strip("Super").strip("Sparse"),
+                args.action_embedding))
+        actor_critic = EmbeddedPolicy(obs_shape, envs.action_space, 
+                lookup=lookup,
+                scale=args.scale,
+                neighbors=args.neighbors,
+                cdf=args.cdf,
+                real_variance=args.real_variance,
+                tanh_mean=args.tanh_mean,
+                base_kwargs={'recurrent': args.recurrent_policy})
+    else:
+        actor_critic = Policy(obs_shape, envs.action_space, 
+                real_variance=args.real_variance,
+                tanh_mean=args.tanh_mean,
+                base_kwargs={'recurrent': args.recurrent_policy})
     actor_critic.to(device)
+
 
     if envs.action_space.__class__.__name__ == "Discrete":
         action_shape = 1
@@ -154,7 +162,8 @@ def main():
         for step in range(args.num_steps):
             # Sample actions
             with torch.no_grad():
-                value, action, action_log_prob, recurrent_hidden_states = actor_critic.act(
+                value, e_action, action, action_log_prob, recurrent_hidden_states \
+                    = actor_critic.act(
                         rollouts.obs[step],
                         rollouts.recurrent_hidden_states[step],
                         rollouts.masks[step])
@@ -166,6 +175,8 @@ def main():
             obs, reward, done, info = envs.step(cpu_actions)
             reward = torch.from_numpy(np.expand_dims(np.stack(reward), 1)).float()
             episode_rewards += reward
+
+            actor_critic.reset(done)
 
             # If done then clean the history of observations.
             masks = torch.FloatTensor([[0.0] if done_ else [1.0] for done_ in done])
@@ -181,10 +192,11 @@ def main():
                 current_obs *= masks
 
             update_current_obs(obs, current_obs, obs_shape, args.num_stack)
-            rollouts.insert(current_obs, recurrent_hidden_states, action, action_log_prob, value, reward, masks)
+            rollouts.insert(current_obs, recurrent_hidden_states, e_action, 
+                    action_log_prob, value, reward, masks)
 
         actions = torch.cat(actions, 0)
-        print(actions.min().item(), actions.max().item())
+        print(actions.min().item(), actions.max().item(), flush=True)
         # mean_action = torch.cat(actions, 0).mean(0)
         # print("({:.3f}, {:.3f})".format(mean_action[0], mean_action[1]))
 
@@ -199,7 +211,7 @@ def main():
 
         rollouts.after_update()
 
-        if j % args.save_interval == 0 and args.save_dir != "":
+        if j > 0 and j % args.save_interval == 0 and args.save_dir != "":
             save_path = os.path.join(args.save_dir, args.algo)
             try:
                 os.makedirs(save_path)

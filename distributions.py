@@ -46,9 +46,11 @@ class Categorical(nn.Module):
 
 
 class DiagGaussian(nn.Module):
-    def __init__(self, num_inputs, num_outputs, real_variance):
+    def __init__(self, num_inputs, num_outputs, real_variance, 
+                 tanh_mean=False):
         super(DiagGaussian, self).__init__()
         self.real_variance = real_variance
+        self.tanh_mean = tanh_mean
         # print("Using real variance: {}".format(self.real_variance))
 
         init_ = lambda m: init(m,
@@ -64,6 +66,8 @@ class DiagGaussian(nn.Module):
 
     def forward(self, x):
         action_mean = self.fc_mean(x)
+        if self.tanh_mean:
+            action_mean = F.tanh(action_mean)
 
         if self.real_variance:
             action_logstd = self.logstd(x)

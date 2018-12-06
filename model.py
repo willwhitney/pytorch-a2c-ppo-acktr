@@ -1,9 +1,11 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import torch.distributions as td
 from distributions import Categorical, DiagGaussian
 from utils import init, init_normc_
 
+import numpy as np
 
 class Flatten(nn.Module):
     def forward(self, x):
@@ -11,7 +13,9 @@ class Flatten(nn.Module):
 
 
 class Policy(nn.Module):
-    def __init__(self, obs_shape, action_space, real_variance=False, 
+    def __init__(self, obs_shape, action_space, 
+                 real_variance=False, 
+                 tanh_mean=False,
                  base_kwargs=None):
         super(Policy, self).__init__()
         if base_kwargs is None:
@@ -33,7 +37,8 @@ class Policy(nn.Module):
         elif action_space.__class__.__name__ == "Box":
             num_outputs = action_space.shape[0]
             self.dist = DiagGaussian(self.base.output_size, num_outputs, 
-                                     real_variance=real_variance)
+                                     real_variance=real_variance,
+                                     tanh_mean=tanh_mean)
         else:
             raise NotImplementedError
 
@@ -61,7 +66,7 @@ class Policy(nn.Module):
         action_log_probs = dist.log_probs(action)
         dist_entropy = dist.entropy().mean()
 
-        return value, action, action_log_probs, rnn_hxs
+        return value, action, action, action_log_probs, rnn_hxs
 
     def get_value(self, inputs, rnn_hxs, masks):
         value, _, _ = self.base(inputs, rnn_hxs, masks)
@@ -75,6 +80,79 @@ class Policy(nn.Module):
         dist_entropy = dist.entropy().mean()
 
         return value, action_log_probs, dist_entropy, rnn_hxs
+
+
+class EmbeddedPolicy(Policy):
+    def __init__(self, *args, lookup=None, 
+                 scale=0.1, neighbors=1, cdf=False, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.lookup = lookup
+        self.low = np.stack(self.lookup.keys).min()
+        self.high = np.stack(self.lookup.keys).max()
+        self.scale = scale * max(abs(self.low), abs(self.high))
+        
+        self.neighbors = neighbors
+        self.cdf = cdf
+        # self.gamma = gamma
+        # self.pending_states = None
+        # self.pending_e_actions = None
+        self.pending_plans = None
+        # self.pending_values = None
+        # self.pending_logprobs = None
+
+    def act(self, *args, **kwargs):
+        values, e_actions, _, e_logprobs, rnn_hxs = super().act(*args, **kwargs)
+        scaled_e_actions = [self.scale_key(a.cpu()) for a in e_actions]
+        # import ipdb; ipdb.set_trace()
+        plans = torch.stack([self.lookup.minnorm_match(a, neighbors=self.neighbors)
+                             for a in scaled_e_actions])
+        
+        if self.pending_plans is None: 
+            # self.pending_states = [[] for _ in range(len(e_actions))]
+            # self.pending_e_actions = [[] for _ in range(len(e_actions))]
+            self.pending_plans = [[] for _ in range(len(e_actions))]
+            # self.pending_values = [[] for _ in range(len(e_actions))]
+            # self.pending_logprobs = [[] for _ in range(len(e_actions))]
+
+        action_logprobs = e_logprobs.detach()
+        for i in range(len(e_actions)):
+            # import ipdb; ipdb.set_trace()
+            if len(self.pending_plans[i]) == 0:
+                # self.pending_states[i] = inputs[i]
+                # self.pending_e_actions[i] = e_actions[i]
+                self.pending_plans[i] = list(plans[i])
+                # self.pending_values[i] = values[i]
+                # self.pending_logprobs[i] = e_logprobs[i]
+            else:
+                action_logprobs[i] = 1e7
+
+        base_actions = torch.stack([plan[0] for plan in self.pending_plans])
+        self.pending_plans = [plan[1:] for plan in self.pending_plans]
+        return (
+                values,
+                e_actions,
+                base_actions,
+                action_logprobs,
+                rnn_hxs
+            )
+
+
+    def scale_key(self, key):
+        if self.cdf:
+            key = key * self.scale
+        else:
+            if hasattr(self.lookup, 'embedded_offset'):
+                offset = self.lookup.embedded_offset
+            else:
+                offset = torch.zeros(key.size())
+            key = key * self.scale + offset
+        return key.numpy()
+
+
+    def reset(self, dones):
+        for i, done in enumerate(dones):
+            if self.pending_plans is not None:
+                if done > 0: self.pending_plans[i] = []
 
 
 class NNBase(nn.Module):
