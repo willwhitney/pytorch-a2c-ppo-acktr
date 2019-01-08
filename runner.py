@@ -13,11 +13,15 @@ if not os.path.exists("slurm_scripts"):
 code_dir = '/private/home/willwhitney/code'
 
 # basename = "traj2_kl0_2"
-basename = "neighbors"
+basename = "base"
 grids = [
     {
-        "seed": list(range(2)),
-        "env-name": ["LinearPointMass-v0"],
+        "seed": list(range(8)),
+        "env-name": [
+            "Pusher-v2",
+            "Striker-v2",
+            # "SuperSparseReacher-v2"
+        ],
 
         "algo": ["ppo"],
         "use-gae": [True],
@@ -32,17 +36,92 @@ grids = [
         "tau": [0.95],
         "num-frames": [10000000],
         "num-stack": [1],
-        "action-embedding": [
-            'minnorm1000_traj4',
-            'minnorm1000_traj2',
-        ],
         "real-variance": [True],
         "add-timestep": [True],
-        "cdf": [False],
-        "tanh-mean": [False],
-        "scale": [0.1],
-        "neighbors": [1000, 100, 10, 1],
     },
+
+    # {
+    #     "seed": list(range(4)),
+    #     "env-name": [
+    #         "SparseReacher-v2",
+    #         # "SuperSparseReacher-v2"
+    #     ],
+
+    #     "algo": ["ppo"],
+    #     "use-gae": [True],
+    #     "lr": [3e-4],
+    #     "entropy-coef": [0],
+    #     "num-processes": [8],
+    #     "num-steps": [256],
+    #     "num-mini-batch": [32],
+    #     "ppo-epoch": [10],
+    #     "clip-param": [0.2],
+    #     "gamma": [0.99],
+    #     "tau": [0.95],
+    #     "num-frames": [10000000],
+    #     "num-stack": [1],
+    #     # "action-decoder": [
+    #     #     'decoder_reacher_traj4',
+    #     #     'decoder_reacher',
+    #     #     None,
+    #     # ],
+    #     "real-variance": [True],
+    #     "add-timestep": [True],
+    #     "scale": [0.1],
+    # },
+    # {
+    #     "seed": list(range(4)),
+    #     "env-name": ["SuperSparseReacher-v2"],
+
+    #     "algo": ["ppo"],
+    #     "use-gae": [True],
+    #     "lr": [3e-4],
+    #     "entropy-coef": [0],
+    #     "num-processes": [8],
+    #     "num-steps": [256],
+    #     "num-mini-batch": [32],
+    #     "ppo-epoch": [10],
+    #     "clip-param": [0.2],
+    #     "gamma": [0.99],
+    #     "tau": [0.95],
+    #     "num-frames": [10000000],
+    #     "num-stack": [1],
+    #     # "action-decoder": [
+    #     #     'decoder_traj4',
+    #     # ],
+    #     "real-variance": [True],
+    #     "add-timestep": [True],
+    #     "scale": [0.1],
+    # },
+
+    # {
+    #     "seed": list(range(2)),
+    #     "env-name": ["LinearPointMass-v0"],
+
+    #     "algo": ["ppo"],
+    #     "use-gae": [True],
+    #     "lr": [3e-4],
+    #     "entropy-coef": [0],
+    #     "num-processes": [8],
+    #     "num-steps": [256],
+    #     "num-mini-batch": [32],
+    #     "ppo-epoch": [10],
+    #     "clip-param": [0.2],
+    #     "gamma": [0.99],
+    #     "tau": [0.95],
+    #     "num-frames": [10000000],
+    #     "num-stack": [1],
+    #     "action-embedding": [
+    #         'minnorm1000_traj4',
+    #         'minnorm1000_traj2',
+    #     ],
+    #     "real-variance": [True],
+    #     "add-timestep": [True],
+    #     "cdf": [False],
+    #     "tanh-mean": [False],
+    #     "scale": [0.1],
+    #     "neighbors": [1000, 100, 10, 1],
+    # },
 
     # {
     #     "seed": list(range(2)),

@@ -51,12 +51,17 @@ def write_options(opt, location):
         f.write(serial_opt)
         f.flush()
 
-def save_gif(filename, inputs, bounce=False, duration=0.2):
+def save_gif(filename, inputs, bounce=False, color_last=False, duration=0.2):
     images = []
     for tensor in inputs:
         tensor = tensor.cpu()
-        tensor = tensor.transpose(0,1).transpose(1,2).clamp(0,1)
+        if not color_last:
+            tensor = tensor.transpose(0,1).transpose(1,2)
+        tensor = tensor.clamp(0,1)
         images.append(tensor.cpu().numpy())
     if bounce:
         images = images + list(reversed(images[1:-1]))
-    imageio.mimsave(filename, images, duration=duration)
+    imageio.mimsave(filename, images)
+
+
+# utils.save_gif('current.mp4', [torch.tensor(im).float()/255 for im in images], color_last=True)

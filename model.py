@@ -81,15 +81,21 @@ class Policy(nn.Module):
 
         return value, action_log_probs, dist_entropy, rnn_hxs
 
+    def reset(self, *args):
+        pass
+
 
 class EmbeddedPolicy(Policy):
-    def __init__(self, *args, lookup=None, 
+    def __init__(self, *args, lookup=None, decoder=None,
                  scale=0.1, neighbors=1, cdf=False, **kwargs):
         super().__init__(*args, **kwargs)
         self.lookup = lookup
-        self.low = np.stack(self.lookup.keys).min()
-        self.high = np.stack(self.lookup.keys).max()
-        self.scale = scale * max(abs(self.low), abs(self.high))
+        self.decoder = decoder
+
+        if self.lookup:
+            self.low = np.stack(self.lookup.keys).min()
+            self.high = np.stack(self.lookup.keys).max()
+            self.scale = scale * max(abs(self.low), abs(self.high))
         
         self.neighbors = neighbors
         self.cdf = cdf
@@ -102,10 +108,14 @@ class EmbeddedPolicy(Policy):
 
     def act(self, *args, **kwargs):
         values, e_actions, _, e_logprobs, rnn_hxs = super().act(*args, **kwargs)
-        scaled_e_actions = [self.scale_key(a.cpu()) for a in e_actions]
         # import ipdb; ipdb.set_trace()
-        plans = torch.stack([self.lookup.minnorm_match(a, neighbors=self.neighbors)
-                             for a in scaled_e_actions])
+        if self.lookup:
+            scaled_e_actions = [self.scale_key(a.cpu()) for a in e_actions]
+            plans = torch.stack(
+                    [self.lookup.minnorm_match(a, neighbors=self.neighbors)
+                     for a in scaled_e_actions])
+        else:
+            plans = self.decoder(e_actions)
         
         if self.pending_plans is None: 
             # self.pending_states = [[] for _ in range(len(e_actions))]

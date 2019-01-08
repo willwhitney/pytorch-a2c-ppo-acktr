@@ -35,14 +35,14 @@ sys.path.insert(0, '../action-embedding')
 import gridworld.grid_world_env
 
 
-def make_env(env_id, seed, rank, log_dir, add_timestep):
+def make_env(env_id, seed, rank, log_dir, add_timestep, allow_reset=False):
     def _thunk():
         # gridworld_steps = 800 if lookup is None else 100
-        register(
-            id='GridWorld-v0',
-            entry_point='gridworld.grid_world_env:GridWorldEnv',
-            # max_episode_steps=gridworld_steps,
-        )
+        # register(
+        #     id='GridWorld-v0',
+        #     entry_point='gridworld.grid_world_env:GridWorldEnv',
+        #     # max_episode_steps=gridworld_steps,
+        # )
 
         if env_id.startswith("dm"):
             _, domain, task = env_id.split('.')
@@ -66,7 +66,8 @@ def make_env(env_id, seed, rank, log_dir, add_timestep):
 
 
         if log_dir is not None:
-            env = bench.Monitor(env, os.path.join(log_dir, str(rank)))
+            env = bench.Monitor(env, os.path.join(log_dir, str(rank)),
+                        allow_early_resets=allow_reset)
 
         # if lookup is not None:
         #     env = EmbeddedAction(env, lookup, scale, cdf)

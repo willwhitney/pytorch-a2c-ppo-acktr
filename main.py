@@ -19,6 +19,7 @@ from arguments import get_args
 from envs import make_env
 from model import Policy, EmbeddedPolicy
 from storage import RolloutStorage
+import utils
 from utils import update_current_obs, write_options
 from visualize import visdom_plot
 import algo
@@ -58,6 +59,24 @@ except OSError:
 
 write_options(args, args.log_dir)
 
+def construct_envs(allow_reset=False):
+    envs = [make_env(
+                args.env_name, args.seed, i, args.log_dir,
+                args.add_timestep,
+                allow_reset=allow_reset)
+            for i in range(args.num_processes)]
+
+    if args.num_processes > 1:
+        envs = SubprocVecEnv(envs)
+    else:
+        envs = DummyVecEnv(envs)
+
+    if len(envs.observation_space.shape) == 1:
+        envs = VecNormalize(envs, gamma=args.gamma)
+
+    return envs
+
+
 def main():
     print("#######")
     print(("WARNING: All rewards are clipped or normalized so you need "
@@ -72,22 +91,12 @@ def main():
         viz = Visdom(server='http://100.97.69.42', port=args.port)
         win = None
 
-    envs = [make_env(
-                args.env_name, args.seed, i, args.log_dir,
-                args.add_timestep)
-            for i in range(args.num_processes)]
-
-    if args.num_processes > 1:
-        envs = SubprocVecEnv(envs)
-    else:
-        envs = DummyVecEnv(envs)
-
-    if len(envs.observation_space.shape) == 1:
-        envs = VecNormalize(envs, gamma=args.gamma)
+    envs = construct_envs()
 
     obs_shape = envs.observation_space.shape
     obs_shape = (obs_shape[0] * args.num_stack, *obs_shape[1:])
 
+    render_envs = construct_envs(allow_reset=True)
 
     lookup = None
     if args.dummy_embedding:
@@ -100,6 +109,19 @@ def main():
                 lookup=lookup,
                 scale=args.scale,
                 real_variance=args.real_variance,
+                base_kwargs={'recurrent': args.recurrent_policy})
+    elif args.action_decoder is not None:
+        decoder = torch.load(
+                "../action-embedding/results/{}/{}/decoder.pt".format(
+                args.env_name.strip("Super").strip("Sparse"),
+                args.action_decoder))
+        actor_critic = EmbeddedPolicy(obs_shape, envs.action_space, 
+                decoder=decoder,
+                scale=args.scale,
+                neighbors=args.neighbors,
+                cdf=args.cdf,
+                real_variance=args.real_variance,
+                tanh_mean=args.tanh_mean,
                 base_kwargs={'recurrent': args.recurrent_policy})
     elif args.action_embedding is not None:
         lookup = torch.load(
@@ -246,6 +268,56 @@ def main():
                                   args.algo, args.num_frames)
             except IOError:
                 pass
+
+        if j % args.render_interval == 0:
+            if isinstance(envs, VecNormalize):
+                render_envs.ob_rms.mean = np.copy(envs.ob_rms.mean)
+                render_envs.ob_rms.var = np.copy(envs.ob_rms.var)
+                render_envs.ret_rms.mean = np.copy(envs.ret_rms.mean)
+                render_envs.ret_rms.var = np.copy(envs.ret_rms.var)
+        
+            render_rollouts = RolloutStorage(1000, args.num_processes, obs_shape,
+                envs.action_space, actor_critic.recurrent_hidden_state_size)
+
+            render_current_obs = torch.zeros(args.num_processes, *obs_shape)
+            obs = render_envs.reset()
+            update_current_obs(obs, render_current_obs, obs_shape, args.num_stack)
+            render_rollouts.obs[0].copy_(current_obs)
+            render_current_obs = render_current_obs.to(device)
+            render_rollouts.to(device)
+
+            images = [render_envs.render(mode='rgb_array')]
+            for step in range(500):
+                with torch.no_grad():
+                    import ipdb; ipdb.set_trace()
+                    value, e_action, action, action_log_prob, recurrent_hidden_states \
+                        = actor_critic.act(
+                            render_rollouts.obs[step],
+                            render_rollouts.recurrent_hidden_states[step],
+                            render_rollouts.masks[step])
+
+                    cpu_actions = action.squeeze(1).cpu().numpy()
+
+                    # Obser reward and next obs
+                    obs, reward, done, info = render_envs.step(cpu_actions)
+                    actor_critic.reset(done)
+                    images.append(render_envs.render(mode='rgb_array'))
+
+                    if render_current_obs.dim() == 4:
+                        render_current_obs *= masks.unsqueeze(2).unsqueeze(2)
+                    else:
+                        render_current_obs *= masks
+
+                    update_current_obs(obs, render_current_obs, obs_shape, args.num_stack)
+
+            try:
+                utils.save_gif('{}/{}.mp4'.format(args.log_dir, j), 
+                        [torch.tensor(im).float()/255 for im in images], 
+                        color_last=True)
+            except:
+                import ipdb; ipdb.set_trace()
+
+
 
 if __name__ == "__main__":
     main()
