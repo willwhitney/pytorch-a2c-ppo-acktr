@@ -12,14 +12,52 @@ if not os.path.exists("slurm_scripts"):
 
 code_dir = '/private/home/willwhitney/code'
 
-# basename = "traj2_kl0_2"
-basename = "base"
+basename = "decodertest"
 grids = [
+    # {
+    #     "seed": list(range(4)),
+    #     "env-name": [
+    #         # "Reacher-v2",
+    #         "Pusher-v2",
+    #         # "Striker-v2",
+    #         # "SuperSparseReacher-v2"
+    #     ],
+
+    #     "algo": ["ppo"],
+    #     "use-gae": [True],
+    #     "lr": [3e-4],
+    #     "entropy-coef": [0],
+    #     "num-processes": [8],
+    #     "num-steps": [64, 128],
+    #     "num-mini-batch": [32],
+    #     "ppo-epoch": [10],
+    #     "clip-param": [0.2],
+    #     "gamma": [0.99],
+    #     "tau": [0.95],
+    #     "num-frames": [10000000],
+    #     "num-stack": [1],
+    #     "real-variance": [False],
+    #     "add-timestep": [True],
+    #     "no-vis": [True],
+    #     "action-decoder": [
+    #         # "pusher_rawstate_embed7_traj4",
+    #         # "pusher_embed7_tra8_qpos-qvel",
+    #         "pusher_embed7_traj8",
+    #     #     "pusher_embed7_traj4",
+    #     #     "pusher_embed7_traj2",
+    #     #     "pusher_embed7_traj1",
+    #     ],
+    #     # "scale": [0.1, 0.3, 1.0, 2.0],
+    #     # "dummy-embedding": ["repeat"],
+    #     # "dummy-traj-len": [4],
+    #     "scale": [1],
+    # },
     {
-        "seed": list(range(8)),
+        "seed": list(range(4)),
         "env-name": [
+            # "Reacher-v2",
             "Pusher-v2",
-            "Striker-v2",
+            # "Striker-v2",
             # "SuperSparseReacher-v2"
         ],
 
@@ -36,8 +74,21 @@ grids = [
         "tau": [0.95],
         "num-frames": [10000000],
         "num-stack": [1],
-        "real-variance": [True],
+        "real-variance": [False],
         "add-timestep": [True],
+        "no-vis": [True],
+        "action-decoder": [
+            "pusher_rawstate_embed7_traj4",
+            "pusher_embed7_tra8_qpos-qvel",
+        #     "pusher_embed7_traj8",
+        #     "pusher_embed7_traj4",
+        #     "pusher_embed7_traj2",
+        #     "pusher_embed7_traj1",
+        ],
+        # "scale": [0.1, 0.3, 1.0, 2.0],
+        # "dummy-embedding": ["repeat"],
+        # "dummy-traj-len": [4],
+        "scale": [1],
     },
 
     # {
@@ -437,12 +488,12 @@ for job in jobs:
         slurmfile.write("#SBATCH --error=slurm_logs/" + jobname + ".err\n")
         slurmfile.write("#SBATCH --export=ALL\n")
         slurmfile.write("#SBATCH --signal=USR1@600\n")
-        slurmfile.write("#SBATCH --time=3-00\n")
+        slurmfile.write("#SBATCH --time=1-00\n")
         # slurmfile.write("#SBATCH -p dev\n")
         slurmfile.write("#SBATCH -p dev,learnfair\n")
         # slurmfile.write("#SBATCH -p priority\n")
         slurmfile.write("#SBATCH -N 1\n")
-        slurmfile.write("#SBATCH --mem=32gb\n")
+        slurmfile.write("#SBATCH --mem=48gb\n")
 
         slurmfile.write("#SBATCH -c 9\n")
         slurmfile.write("#SBATCH --gres=gpu:1\n")

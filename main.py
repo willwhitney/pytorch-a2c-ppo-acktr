@@ -59,9 +59,9 @@ except OSError:
 
 write_options(args, args.log_dir)
 
-def construct_envs(allow_reset=False):
+def construct_envs(log_dir=args.log_dir, allow_reset=False):
     envs = [make_env(
-                args.env_name, args.seed, i, args.log_dir,
+                args.env_name, args.seed, i, log_dir,
                 args.add_timestep,
                 allow_reset=allow_reset)
             for i in range(args.num_processes)]
@@ -96,7 +96,7 @@ def main():
     obs_shape = envs.observation_space.shape
     obs_shape = (obs_shape[0] * args.num_stack, *obs_shape[1:])
 
-    render_envs = construct_envs(allow_reset=True)
+    # render_envs = construct_envs(log_dir='/tmp', allow_reset=True)
 
     lookup = None
     if args.dummy_embedding:
@@ -143,11 +143,13 @@ def main():
                 base_kwargs={'recurrent': args.recurrent_policy})
     actor_critic.to(device)
 
-
-    if envs.action_space.__class__.__name__ == "Discrete":
-        action_shape = 1
+    if isinstance(actor_critic, EmbeddedPolicy):
+        action_shape = actor_critic.embedded_action_size
     else:
-        action_shape = envs.action_space.shape[0]
+        if envs.action_space.__class__.__name__ == "Discrete":
+            action_shape = 1
+        else:
+            action_shape = envs.action_space.shape[0]
 
     if args.algo == 'a2c':
         agent = algo.A2C_ACKTR(actor_critic, args.value_loss_coef,
@@ -164,7 +166,7 @@ def main():
                                args.entropy_coef, acktr=True)
 
     rollouts = RolloutStorage(args.num_steps, args.num_processes, obs_shape,
-        envs.action_space, actor_critic.recurrent_hidden_state_size)
+        envs.action_space, action_shape, actor_critic.recurrent_hidden_state_size)
     current_obs = torch.zeros(args.num_processes, *obs_shape)
 
     obs = envs.reset()
@@ -181,7 +183,12 @@ def main():
     start = time.time()
     for j in range(num_updates):
         actions = []
+
+        render_iteration = (j > 0) and (j % args.render_interval == 0)
+        if render_iteration:
+            images = [envs.render(mode='rgb_array')]
         for step in range(args.num_steps):
+
             # Sample actions
             with torch.no_grad():
                 value, e_action, action, action_log_prob, recurrent_hidden_states \
@@ -197,6 +204,10 @@ def main():
             obs, reward, done, info = envs.step(cpu_actions)
             reward = torch.from_numpy(np.expand_dims(np.stack(reward), 1)).float()
             episode_rewards += reward
+
+            if render_iteration:
+                images.append(envs.render(mode='rgb_array'))
+
 
             actor_critic.reset(done)
 
@@ -217,8 +228,13 @@ def main():
             rollouts.insert(current_obs, recurrent_hidden_states, e_action, 
                     action_log_prob, value, reward, masks)
 
+        if render_iteration:
+            utils.save_gif('{}/{}.mp4'.format(args.log_dir, j), 
+                            [torch.tensor(im).float()/255 for im in images], 
+                            color_last=True)
+
         actions = torch.cat(actions, 0)
-        print(actions.min().item(), actions.max().item(), flush=True)
+        # print(actions.min().item(), actions.max().item(), flush=True)
         # mean_action = torch.cat(actions, 0).mean(0)
         # print("({:.3f}, {:.3f})".format(mean_action[0], mean_action[1]))
 
@@ -260,7 +276,7 @@ def main():
                        final_rewards.median(),
                        final_rewards.min(),
                        final_rewards.max(), dist_entropy,
-                       value_loss, action_loss))
+                       value_loss, action_loss), flush=True)
         if args.vis and j % args.vis_interval == 0:
             try:
                 # Sometimes monitor doesn't properly flush the outputs
@@ -269,53 +285,53 @@ def main():
             except IOError:
                 pass
 
-        if j % args.render_interval == 0:
-            if isinstance(envs, VecNormalize):
-                render_envs.ob_rms.mean = np.copy(envs.ob_rms.mean)
-                render_envs.ob_rms.var = np.copy(envs.ob_rms.var)
-                render_envs.ret_rms.mean = np.copy(envs.ret_rms.mean)
-                render_envs.ret_rms.var = np.copy(envs.ret_rms.var)
+        # if j % args.render_interval == 0:
+        #     if isinstance(envs, VecNormalize):
+        #         render_envs.ob_rms.mean = np.copy(envs.ob_rms.mean)
+        #         render_envs.ob_rms.var = np.copy(envs.ob_rms.var)
+        #         render_envs.ret_rms.mean = np.copy(envs.ret_rms.mean)
+        #         render_envs.ret_rms.var = np.copy(envs.ret_rms.var)
         
-            render_rollouts = RolloutStorage(1000, args.num_processes, obs_shape,
-                envs.action_space, actor_critic.recurrent_hidden_state_size)
+        #     render_rollouts = RolloutStorage(1000, args.num_processes, obs_shape,
+        #         envs.action_space, actor_critic.recurrent_hidden_state_size)
 
-            render_current_obs = torch.zeros(args.num_processes, *obs_shape)
-            obs = render_envs.reset()
-            update_current_obs(obs, render_current_obs, obs_shape, args.num_stack)
-            render_rollouts.obs[0].copy_(current_obs)
-            render_current_obs = render_current_obs.to(device)
-            render_rollouts.to(device)
+        #     render_current_obs = torch.zeros(args.num_processes, *obs_shape)
+        #     obs = render_envs.reset()
+        #     update_current_obs(obs, render_current_obs, obs_shape, args.num_stack)
+        #     render_rollouts.obs[0].copy_(current_obs)
+        #     render_current_obs = render_current_obs.to(device)
+        #     render_rollouts.to(device)
 
-            images = [render_envs.render(mode='rgb_array')]
-            for step in range(500):
-                with torch.no_grad():
-                    import ipdb; ipdb.set_trace()
-                    value, e_action, action, action_log_prob, recurrent_hidden_states \
-                        = actor_critic.act(
-                            render_rollouts.obs[step],
-                            render_rollouts.recurrent_hidden_states[step],
-                            render_rollouts.masks[step])
+        #     images = [render_envs.render(mode='rgb_array')]
+        #     for step in range(500):
+        #         with torch.no_grad():
+        #             # import ipdb; ipdb.set_trace()
+        #             value, e_action, action, action_log_prob, recurrent_hidden_states \
+        #                 = actor_critic.act(
+        #                     render_rollouts.obs[step],
+        #                     render_rollouts.recurrent_hidden_states[step],
+        #                     render_rollouts.masks[step])
 
-                    cpu_actions = action.squeeze(1).cpu().numpy()
+        #             cpu_actions = action.squeeze(1).cpu().numpy()
 
-                    # Obser reward and next obs
-                    obs, reward, done, info = render_envs.step(cpu_actions)
-                    actor_critic.reset(done)
-                    images.append(render_envs.render(mode='rgb_array'))
+        #             # Obser reward and next obs
+        #             obs, reward, done, info = render_envs.step(cpu_actions)
+        #             actor_critic.reset(done)
+        #             images.append(render_envs.render(mode='rgb_array'))
 
-                    if render_current_obs.dim() == 4:
-                        render_current_obs *= masks.unsqueeze(2).unsqueeze(2)
-                    else:
-                        render_current_obs *= masks
+        #             if render_current_obs.dim() == 4:
+        #                 render_current_obs *= masks.unsqueeze(2).unsqueeze(2)
+        #             else:
+        #                 render_current_obs *= masks
 
-                    update_current_obs(obs, render_current_obs, obs_shape, args.num_stack)
+        #             update_current_obs(obs, render_current_obs, obs_shape, args.num_stack)
 
-            try:
-                utils.save_gif('{}/{}.mp4'.format(args.log_dir, j), 
-                        [torch.tensor(im).float()/255 for im in images], 
-                        color_last=True)
-            except:
-                import ipdb; ipdb.set_trace()
+        #     try:
+        #         utils.save_gif('{}/{}.mp4'.format(args.log_dir, j), 
+        #                 [torch.tensor(im).float()/255 for im in images], 
+        #                 color_last=True)
+        #     except:
+        #         import ipdb; ipdb.set_trace()
 
 
 

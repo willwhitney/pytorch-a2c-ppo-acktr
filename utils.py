@@ -63,5 +63,38 @@ def save_gif(filename, inputs, bounce=False, color_last=False, duration=0.2):
         images = images + list(reversed(images[1:-1]))
     imageio.mimsave(filename, images)
 
+def make_image(tensor, color_last=False):
+    tensor = tensor.cpu().clamp(0, 1)
+    if tensor.size(0) == 1:
+        tensor = tensor.expand(3, tensor.size(1), tensor.size(2))
+        color_last = False
+    # import ipdb; ipdb.set_trace()
+    channel_axis = 2 if color_last else 0
+    return scipy.misc.toimage(tensor.numpy(),
+                              high=255*tensor.max().item(),
+                              channel_axis=channel_axis)
 
-# utils.save_gif('current.mp4', [torch.tensor(im).float()/255 for im in images], color_last=True)
+def save_image(filename, tensor):
+    img = make_image(tensor)
+    img.save(filename)
+
+def show(img_tensor, color_last=False):
+    if img_tensor.dim() > 2 and not color_last:
+        img_tensor = img_tensor.transpose(0, 1).transpose(1, 2)
+    # f = plt.figure()
+    # plt.imshow(output_tensor.numpy())
+    # plt.show()
+    # plt.close(f)
+    img_tensor = img_tensor.squeeze()
+    max_size = 12
+    max_input_size = max(img_tensor.size(0), img_tensor.size(1))
+    figsize = (torch.Tensor((img_tensor.size(1), img_tensor.size(0)))
+               * max_size / max_input_size).ceil()
+
+    fig = plt.figure(figsize=list(figsize))
+    if img_tensor.dim() == 2:
+        plt.gray()
+
+    plt.imshow(img_tensor.numpy(), interpolation='bilinear')
+    plt.show()
+    plt.close(fig)

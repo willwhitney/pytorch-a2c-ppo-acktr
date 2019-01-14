@@ -4,6 +4,7 @@ import torch.nn.functional as F
 import torch.distributions as td
 from distributions import Categorical, DiagGaussian
 from utils import init, init_normc_
+from gym import spaces
 
 import numpy as np
 
@@ -86,16 +87,26 @@ class Policy(nn.Module):
 
 
 class EmbeddedPolicy(Policy):
-    def __init__(self, *args, lookup=None, decoder=None,
+    def __init__(self, obs_shape, action_space, lookup=None, decoder=None,
                  scale=0.1, neighbors=1, cdf=False, **kwargs):
-        super().__init__(*args, **kwargs)
+        if lookup:
+            self.embedded_action_size = lookup.keys[0].size(0)
+        else:
+            self.embedded_action_size = decoder.layers[0].in_features
+       
+        super().__init__(obs_shape, 
+                action_space=spaces.Box(-1, 1, shape=(self.embedded_action_size,)), 
+                **kwargs)
         self.lookup = lookup
         self.decoder = decoder
+        
 
         if self.lookup:
             self.low = np.stack(self.lookup.keys).min()
             self.high = np.stack(self.lookup.keys).max()
             self.scale = scale * max(abs(self.low), abs(self.high))
+        else:
+            self.scale = scale
         
         self.neighbors = neighbors
         self.cdf = cdf
@@ -115,7 +126,8 @@ class EmbeddedPolicy(Policy):
                     [self.lookup.minnorm_match(a, neighbors=self.neighbors)
                      for a in scaled_e_actions])
         else:
-            plans = self.decoder(e_actions)
+            # import ipdb; ipdb.set_trace()
+            plans = self.decoder(e_actions * self.scale)
         
         if self.pending_plans is None: 
             # self.pending_states = [[] for _ in range(len(e_actions))]
@@ -148,14 +160,12 @@ class EmbeddedPolicy(Policy):
 
 
     def scale_key(self, key):
-        if self.cdf:
-            key = key * self.scale
+        if self.lookup and hasattr(self.lookup, 'embedded_offset'):
+            offset = self.lookup.embedded_offset
         else:
-            if hasattr(self.lookup, 'embedded_offset'):
-                offset = self.lookup.embedded_offset
-            else:
-                offset = torch.zeros(key.size())
-            key = key * self.scale + offset
+            offset = torch.zeros(key.size())
+
+        key = key * self.scale + offset
         return key.numpy()
 
 

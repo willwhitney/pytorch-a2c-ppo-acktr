@@ -5,7 +5,8 @@ import torch
 class DummyLookup:
     def __init__(self, action_space, traj_len):
         # import ipdb; ipdb.set_trace()
-        self.keys = [action_space.low, action_space.high]
+        self.keys = [torch.tensor(action_space.low), 
+                     torch.tensor(action_space.high)]
         self.action_space = action_space
         self.traj_len = traj_len
 
@@ -16,6 +17,10 @@ class DummyLookup:
 
     def __getitem__(self, key):
         return self.query_fn(key)
+
+    def minnorm_match(self, key, *args, **kwargs):
+        return self.query_fn(key)
+
 
 class SpikyDummyLookup(DummyLookup):
     def query_fn(self, key):
