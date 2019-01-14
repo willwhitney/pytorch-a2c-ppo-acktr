@@ -14,8 +14,8 @@ class Flatten(nn.Module):
 
 
 class Policy(nn.Module):
-    def __init__(self, obs_shape, action_space, 
-                 real_variance=False, 
+    def __init__(self, obs_shape, action_space,
+                 real_variance=False,
                  tanh_mean=False,
                  base_kwargs=None):
         super(Policy, self).__init__()
@@ -37,7 +37,7 @@ class Policy(nn.Module):
             self.dist = Categorical(self.base.output_size, num_outputs)
         elif action_space.__class__.__name__ == "Box":
             num_outputs = action_space.shape[0]
-            self.dist = DiagGaussian(self.base.output_size, num_outputs, 
+            self.dist = DiagGaussian(self.base.output_size, num_outputs,
                                      real_variance=real_variance,
                                      tanh_mean=tanh_mean)
         else:
@@ -93,13 +93,13 @@ class EmbeddedPolicy(Policy):
             self.embedded_action_size = lookup.keys[0].size(0)
         else:
             self.embedded_action_size = decoder.layers[0].in_features
-       
-        super().__init__(obs_shape, 
-                action_space=spaces.Box(-1, 1, shape=(self.embedded_action_size,)), 
+
+        super().__init__(obs_shape,
+                action_space=spaces.Box(-1, 1, shape=(self.embedded_action_size,)),
                 **kwargs)
         self.lookup = lookup
         self.decoder = decoder
-        
+
 
         if self.lookup:
             self.low = np.stack(self.lookup.keys).min()
@@ -107,7 +107,7 @@ class EmbeddedPolicy(Policy):
             self.scale = scale * max(abs(self.low), abs(self.high))
         else:
             self.scale = scale
-        
+
         self.neighbors = neighbors
         self.cdf = cdf
         # self.gamma = gamma
@@ -128,8 +128,8 @@ class EmbeddedPolicy(Policy):
         else:
             # import ipdb; ipdb.set_trace()
             plans = self.decoder(e_actions * self.scale)
-        
-        if self.pending_plans is None: 
+
+        if self.pending_plans is None:
             # self.pending_states = [[] for _ in range(len(e_actions))]
             # self.pending_e_actions = [[] for _ in range(len(e_actions))]
             self.pending_plans = [[] for _ in range(len(e_actions))]
@@ -146,7 +146,9 @@ class EmbeddedPolicy(Policy):
                 # self.pending_values[i] = values[i]
                 # self.pending_logprobs[i] = e_logprobs[i]
             else:
-                action_logprobs[i] = 1e7
+                # action_logprobs[i] = 1e7
+                action_logprobs[i] = np.infty
+                # e_actions[i].fill_(np.nan)
 
         base_actions = torch.stack([plan[0] for plan in self.pending_plans])
         self.pending_plans = [plan[1:] for plan in self.pending_plans]

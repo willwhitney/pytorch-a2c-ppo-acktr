@@ -5,7 +5,7 @@ import torch
 class DummyLookup:
     def __init__(self, action_space, traj_len):
         # import ipdb; ipdb.set_trace()
-        self.keys = [torch.tensor(action_space.low), 
+        self.keys = [torch.tensor(action_space.low),
                      torch.tensor(action_space.high)]
         self.action_space = action_space
         self.traj_len = traj_len
@@ -20,6 +20,12 @@ class DummyLookup:
 
     def minnorm_match(self, key, *args, **kwargs):
         return self.query_fn(key)
+
+
+class ReverseDummyLookup(DummyLookup):
+    def query_fn(self, key):
+        action_sequence = [np.copy(-key) for _ in range(self.traj_len)]
+        return torch.stack([torch.from_numpy(a) for a in action_sequence])
 
 
 class SpikyDummyLookup(DummyLookup):
@@ -43,6 +49,7 @@ class SpikyDummyLookup(DummyLookup):
 if __name__ == "__main__":
     from gym import spaces
     space = spaces.Box(low=-np.ones(2), high=np.ones(2))
-    lookup = SpikyDummyLookup(space, 2)
-    zero_answer = lookup[np.array([0,0])]
+    # lookup = SpikyDummyLookup(space, 2)
+    # zero_answer = lookup[np.array([0,0])]
+    lookup = ReverseDummyLookup(space, 2)
     import ipdb; ipdb.set_trace()

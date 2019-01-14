@@ -25,11 +25,11 @@ from visualize import visdom_plot
 import algo
 
 from pointmass import point_mass
-from dummy_lookup import DummyLookup, SpikyDummyLookup
+from dummy_lookup import DummyLookup, ReverseDummyLookup, SpikyDummyLookup
 
-from pyvirtualdisplay import Display
-display_ = Display(visible=0, size=(550,550))
-display_.start()
+# from pyvirtualdisplay import Display
+# display_ = Display(visible=0, size=(550,550))
+# display_.start()
 
 # sys.path.insert(0, '../action-embedding')
 # import gridworld.grid_world_env
@@ -102,20 +102,22 @@ def main():
     if args.dummy_embedding:
         if args.dummy_embedding == 'spiky':
             lookup = SpikyDummyLookup(envs.action_space, args.dummy_traj_len)
+        elif args.dummy_embedding == 'reverse':
+            lookup = ReverseDummyLookup(envs.action_space, args.dummy_traj_len)
         else:
             lookup = DummyLookup(envs.action_space, args.dummy_traj_len)
-
         actor_critic = EmbeddedPolicy(obs_shape, envs.action_space,
                 lookup=lookup,
                 scale=args.scale,
                 real_variance=args.real_variance,
                 base_kwargs={'recurrent': args.recurrent_policy})
+
     elif args.action_decoder is not None:
         decoder = torch.load(
                 "../action-embedding/results/{}/{}/decoder.pt".format(
                 args.env_name.strip("Super").strip("Sparse"),
                 args.action_decoder))
-        actor_critic = EmbeddedPolicy(obs_shape, envs.action_space, 
+        actor_critic = EmbeddedPolicy(obs_shape, envs.action_space,
                 decoder=decoder,
                 scale=args.scale,
                 neighbors=args.neighbors,
@@ -123,12 +125,13 @@ def main():
                 real_variance=args.real_variance,
                 tanh_mean=args.tanh_mean,
                 base_kwargs={'recurrent': args.recurrent_policy})
+
     elif args.action_embedding is not None:
         lookup = torch.load(
                 "../action-embedding/results/{}/{}/lookup.pt".format(
                 args.env_name.strip("Super").strip("Sparse"),
                 args.action_embedding))
-        actor_critic = EmbeddedPolicy(obs_shape, envs.action_space, 
+        actor_critic = EmbeddedPolicy(obs_shape, envs.action_space,
                 lookup=lookup,
                 scale=args.scale,
                 neighbors=args.neighbors,
@@ -136,8 +139,9 @@ def main():
                 real_variance=args.real_variance,
                 tanh_mean=args.tanh_mean,
                 base_kwargs={'recurrent': args.recurrent_policy})
+
     else:
-        actor_critic = Policy(obs_shape, envs.action_space, 
+        actor_critic = Policy(obs_shape, envs.action_space,
                 real_variance=args.real_variance,
                 tanh_mean=args.tanh_mean,
                 base_kwargs={'recurrent': args.recurrent_policy})
@@ -225,12 +229,12 @@ def main():
                 current_obs *= masks
 
             update_current_obs(obs, current_obs, obs_shape, args.num_stack)
-            rollouts.insert(current_obs, recurrent_hidden_states, e_action, 
+            rollouts.insert(current_obs, recurrent_hidden_states, e_action,
                     action_log_prob, value, reward, masks)
 
         if render_iteration:
-            utils.save_gif('{}/{}.mp4'.format(args.log_dir, j), 
-                            [torch.tensor(im).float()/255 for im in images], 
+            utils.save_gif('{}/{}.mp4'.format(args.log_dir, j),
+                            [torch.tensor(im).float()/255 for im in images],
                             color_last=True)
 
         actions = torch.cat(actions, 0)
@@ -291,7 +295,7 @@ def main():
         #         render_envs.ob_rms.var = np.copy(envs.ob_rms.var)
         #         render_envs.ret_rms.mean = np.copy(envs.ret_rms.mean)
         #         render_envs.ret_rms.var = np.copy(envs.ret_rms.var)
-        
+
         #     render_rollouts = RolloutStorage(1000, args.num_processes, obs_shape,
         #         envs.action_space, actor_critic.recurrent_hidden_state_size)
 
@@ -327,8 +331,8 @@ def main():
         #             update_current_obs(obs, render_current_obs, obs_shape, args.num_stack)
 
         #     try:
-        #         utils.save_gif('{}/{}.mp4'.format(args.log_dir, j), 
-        #                 [torch.tensor(im).float()/255 for im in images], 
+        #         utils.save_gif('{}/{}.mp4'.format(args.log_dir, j),
+        #                 [torch.tensor(im).float()/255 for im in images],
         #                 color_last=True)
         #     except:
         #         import ipdb; ipdb.set_trace()

@@ -57,20 +57,27 @@ class PPO():
                     masks_batch, actions_batch)
 
                 ratio = torch.exp(action_log_probs - old_action_log_probs_batch)
+
+                # we get infinity from the embedded policy if this embedded action
+                # was not used to select any real actions
+                # this makes ratio 0
+                # -> we do not count those data points
+
                 surr1 = ratio * adv_targ
                 surr2 = torch.clamp(ratio, 1.0 - self.clip_param,
                                            1.0 + self.clip_param) * adv_targ
+
                 action_loss = -torch.min(surr1, surr2).mean()
 
-                value_loss = F.mse_loss(return_batch, values)
+                with torch.autograd.detect_anomaly():
+                    value_loss = F.mse_loss(return_batch, values)
 
-                self.optimizer.zero_grad()
-                (value_loss * self.value_loss_coef + action_loss -
-                 dist_entropy * self.entropy_coef).backward()
-                # import ipdb; ipdb.set_trace()
-                nn.utils.clip_grad_norm_(self.actor_critic.parameters(),
-                                         self.max_grad_norm)
-                self.optimizer.step()
+                    self.optimizer.zero_grad()
+                    (value_loss * self.value_loss_coef + action_loss -
+                     dist_entropy * self.entropy_coef).backward()
+                    nn.utils.clip_grad_norm_(self.actor_critic.parameters(),
+                                             self.max_grad_norm)
+                    self.optimizer.step()
 
                 value_loss_epoch += value_loss.item()
                 action_loss_epoch += action_loss.item()

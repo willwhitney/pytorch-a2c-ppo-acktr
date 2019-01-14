@@ -102,12 +102,11 @@ venv.bak/
 
 trained_models/
 .fuse_hidden*
-<<<<<<< HEAD
 gym_log/
 dataset_*
 slurm_*
-=======
 *.pyt
 slurm_logs/
 slurm_scripts/
 results/
+.DS_Store
