@@ -12,7 +12,7 @@ if not os.path.exists("slurm_scripts"):
 
 code_dir = '/private/home/willwhitney/code'
 
-basename = "decodertest"
+basename = "decoder_infinity_seeds"
 grids = [
     # {
     #     "seed": list(range(4)),
@@ -53,7 +53,7 @@ grids = [
     #     "scale": [1],
     # },
     {
-        "seed": list(range(4)),
+        "seed": list(range(10)),
         "env-name": [
             # "Reacher-v2",
             "Pusher-v2",
@@ -78,14 +78,14 @@ grids = [
         "add-timestep": [True],
         "no-vis": [True],
         "action-decoder": [
-            "pusher_rawstate_embed7_traj4",
-            "pusher_embed7_tra8_qpos-qvel",
-        #     "pusher_embed7_traj8",
+            # "pusher_rawstate_embed7_traj4",
+            # "pusher_embed7_tra8_qpos-qvel",
+            "pusher_embed7_traj8",
         #     "pusher_embed7_traj4",
         #     "pusher_embed7_traj2",
         #     "pusher_embed7_traj1",
         ],
-        # "scale": [0.1, 0.3, 1.0, 2.0],
+        # "scale": [0.1, 0.3, 1.0, 2.0, 3.0],
         # "dummy-embedding": ["repeat"],
         # "dummy-traj-len": [4],
         "scale": [1],

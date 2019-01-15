@@ -69,15 +69,14 @@ class PPO():
 
                 action_loss = -torch.min(surr1, surr2).mean()
 
-                with torch.autograd.detect_anomaly():
-                    value_loss = F.mse_loss(return_batch, values)
+                value_loss = F.mse_loss(return_batch, values)
 
-                    self.optimizer.zero_grad()
-                    (value_loss * self.value_loss_coef + action_loss -
-                     dist_entropy * self.entropy_coef).backward()
-                    nn.utils.clip_grad_norm_(self.actor_critic.parameters(),
-                                             self.max_grad_norm)
-                    self.optimizer.step()
+                self.optimizer.zero_grad()
+                (value_loss * self.value_loss_coef + action_loss -
+                 dist_entropy * self.entropy_coef).backward()
+                nn.utils.clip_grad_norm_(self.actor_critic.parameters(),
+                                         self.max_grad_norm)
+                self.optimizer.step()
 
                 value_loss_epoch += value_loss.item()
                 action_loss_epoch += action_loss.item()
