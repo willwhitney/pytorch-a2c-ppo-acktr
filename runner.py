@@ -12,8 +12,69 @@ if not os.path.exists("slurm_scripts"):
 
 code_dir = '/private/home/willwhitney/code'
 
-basename = "decoder_infinity_seeds"
+basename = "sparsereacher2"
 grids = [
+    # {
+    #     "seed": list(range(8)),
+    #     "env-name": [
+    #         # "Reacher-v2",
+    #         "SparseReacher-v2",
+    #         # "Striker-v2",
+    #         # "SuperSparseReacher-v2"
+    #     ],
+
+    #     "algo": ["ppo"],
+    #     "use-gae": [True],
+    #     "lr": [3e-4],
+    #     "entropy-coef": [0],
+    #     "num-processes": [8],
+    #     "num-steps": [256],
+    #     "num-mini-batch": [32],
+    #     "ppo-epoch": [10],
+    #     "clip-param": [0.2],
+    #     "gamma": [0.99],
+    #     "tau": [0.95],
+    #     "num-frames": [10000000],
+    #     "num-stack": [1],
+    #     "real-variance": [True],
+    #     "add-timestep": [True],
+    #     "no-vis": [True],
+    #     "scale": [1],
+    # },    
+    {
+        "seed": list(range(2, 10)),
+        "env-name": [
+            # "Reacher-v2",
+            "SparseReacher-v2",
+            # "Striker-v2",
+            # "SuperSparseReacher-v2"
+        ],
+
+        "algo": ["ppo"],
+        "use-gae": [True],
+        "lr": [3e-4],
+        "entropy-coef": [0],
+        "num-processes": [8],
+        "num-steps": [256],
+        "num-mini-batch": [32],
+        "ppo-epoch": [10],
+        "clip-param": [0.2],
+        "gamma": [0.99],
+        "tau": [0.95],
+        "num-frames": [10000000],
+        "num-stack": [1],
+        "real-variance": [True],
+        "add-timestep": [True],
+        "no-vis": [True],
+        "action-decoder": [
+            "reacher_qpos_traj4",
+            "reacher_qposqvel_traj4",
+            "reacher_traj4_lowkl_lownorm",
+            "reacher_traj16_lowkl_lownorm",
+        ],
+        "scale": [1],
+    },
+
     # {
     #     "seed": list(range(4)),
     #     "env-name": [
@@ -52,44 +113,44 @@ grids = [
     #     # "dummy-traj-len": [4],
     #     "scale": [1],
     # },
-    {
-        "seed": list(range(10)),
-        "env-name": [
-            # "Reacher-v2",
-            "Pusher-v2",
-            # "Striker-v2",
-            # "SuperSparseReacher-v2"
-        ],
+    # {
+    #     "seed": list(range(8)),
+    #     "env-name": [
+    #         # "Reacher-v2",
+    #         "Pusher-v2",
+    #         # "Striker-v2",
+    #         # "SuperSparseReacher-v2"
+    #     ],
 
-        "algo": ["ppo"],
-        "use-gae": [True],
-        "lr": [3e-4],
-        "entropy-coef": [0],
-        "num-processes": [8],
-        "num-steps": [256],
-        "num-mini-batch": [32],
-        "ppo-epoch": [10],
-        "clip-param": [0.2],
-        "gamma": [0.99],
-        "tau": [0.95],
-        "num-frames": [10000000],
-        "num-stack": [1],
-        "real-variance": [False],
-        "add-timestep": [True],
-        "no-vis": [True],
-        "action-decoder": [
-            # "pusher_rawstate_embed7_traj4",
-            # "pusher_embed7_tra8_qpos-qvel",
-            "pusher_embed7_traj8",
-        #     "pusher_embed7_traj4",
-        #     "pusher_embed7_traj2",
-        #     "pusher_embed7_traj1",
-        ],
-        # "scale": [0.1, 0.3, 1.0, 2.0, 3.0],
-        # "dummy-embedding": ["repeat"],
-        # "dummy-traj-len": [4],
-        "scale": [1],
-    },
+    #     "algo": ["ppo"],
+    #     "use-gae": [True],
+    #     "lr": [3e-4],
+    #     "entropy-coef": [0],
+    #     "num-processes": [8],
+    #     "num-steps": [256],
+    #     "num-mini-batch": [32],
+    #     "ppo-epoch": [10],
+    #     "clip-param": [0.2],
+    #     "gamma": [0.99],
+    #     "tau": [0.95],
+    #     "num-frames": [10000000],
+    #     "num-stack": [1],
+    #     "real-variance": [True],
+    #     "add-timestep": [True],
+    #     "no-vis": [True],
+    #     "action-decoder": [
+    #         # "pusher_rawstate_embed7_traj4",
+    #         # "pusher_embed7_tra8_qpos-qvel",
+    #         "pusher_embed7_traj8",
+    #     #     "pusher_embed7_traj4",
+    #     #     "pusher_embed7_traj2",
+    #     #     "pusher_embed7_traj1",
+    #     ],
+    #     # "scale": [0.1, 0.3, 1.0, 2.0, 3.0],
+    #     # "dummy-embedding": ["repeat"],
+    #     # "dummy-traj-len": [4],
+    #     "scale": [1],
+    # },
 
     # {
     #     "seed": list(range(4)),
@@ -429,12 +490,13 @@ if dry_run:
 else:
     print("Starting {} jobs:".format(len(jobs)))
 
-merged_grid = {}
+all_keys = set().union(*[g.keys() for g in grids])
+merged = {k: set() for k in all_keys}
 for grid in grids:
-    for key in grid:
-        merged_grid[key] = [] if key not in merged_grid else merged_grid[key]
-        merged_grid[key] += grid[key]
-varying_keys = {key for key in merged_grid if len(set(merged_grid[key])) > 1}
+    for key in all_keys:
+        grid_key_value = grid[key] if key in grid else ["<<NONE>>"]
+        merged[key] = merged[key].union(grid_key_value)
+varying_keys = {key for key in merged if len(merged[key]) > 1}
 
 for job in jobs:
     jobname = basename
@@ -488,7 +550,8 @@ for job in jobs:
         slurmfile.write("#SBATCH --error=slurm_logs/" + jobname + ".err\n")
         slurmfile.write("#SBATCH --export=ALL\n")
         slurmfile.write("#SBATCH --signal=USR1@600\n")
-        slurmfile.write("#SBATCH --time=1-00\n")
+        slurmfile.write("#SBATCH --time=0-06\n")
+        # slurmfile.write("#SBATCH --time=1-00\n")
         # slurmfile.write("#SBATCH -p dev\n")
         slurmfile.write("#SBATCH -p dev,learnfair\n")
         # slurmfile.write("#SBATCH -p priority\n")

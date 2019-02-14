@@ -178,16 +178,18 @@ class SparseReacherEnv(gym.envs.mujoco.ReacherEnv):
         reward_dist = - np.linalg.norm(vec)
         reward_ctrl = - np.square(a).sum()
         # import ipdb; ipdb.set_trace()
-        reward = 100 if abs(reward_dist) < 0.01 else reward_ctrl
+        # reward = 5 if abs(reward_dist) < 0.1 else 0
+        reward = -1
+        # reward += reward_ctrl * 5
         self.do_simulation(a, self.frame_skip)
         ob = self._get_obs()
-        done = (reward > 0) and not self.startup
+        done = abs(reward_dist) < 0.1 and not self.startup
         
         self.startup = False
         return ob, reward, done, dict(reward_dist=reward_dist, reward_ctrl=reward_ctrl)
 
 register(
-    id='SparseReacher-v2',
+    id='SparseReacher-v4',
     entry_point='envs:SparseReacherEnv',
     max_episode_steps=50,
 )

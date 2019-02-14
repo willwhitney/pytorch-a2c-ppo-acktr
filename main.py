@@ -113,9 +113,11 @@ def main():
                 base_kwargs={'recurrent': args.recurrent_policy})
 
     elif args.action_decoder is not None:
+        if 'PointMass' in args.env_name: base_env_name = 'LinearPointMass-v0'
+        else: base_env_name = args.env_name.strip("Super").strip("Sparse")
         decoder = torch.load(
                 "../action-embedding/results/{}/{}/decoder.pt".format(
-                args.env_name.strip("Super").strip("Sparse"),
+                base_env_name,
                 args.action_decoder))
         actor_critic = EmbeddedPolicy(obs_shape, envs.action_space,
                 decoder=decoder,
