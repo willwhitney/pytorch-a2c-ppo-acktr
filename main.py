@@ -183,6 +183,7 @@ def main():
     episode_rewards = torch.zeros([args.num_processes, 1])
     final_rewards = torch.zeros([args.num_processes, 1])
 
+    # import ipdb; ipdb.set_trace()
     current_obs = current_obs.to(device)
     rollouts.to(device)
 
@@ -236,7 +237,7 @@ def main():
 
         if render_iteration:
             utils.save_gif('{}/{}.mp4'.format(args.log_dir, j),
-                            [torch.tensor(im).float()/255 for im in images],
+                            [torch.tensor(im.copy()).float()/255 for im in images],
                             color_last=True)
 
         actions = torch.cat(actions, 0)

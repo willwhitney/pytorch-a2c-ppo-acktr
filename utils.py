@@ -58,7 +58,7 @@ def save_gif(filename, inputs, bounce=False, color_last=False, duration=0.2):
         if not color_last:
             tensor = tensor.transpose(0,1).transpose(1,2)
         tensor = tensor.clamp(0,1)
-        images.append(tensor.cpu().numpy())
+        images.append((tensor.cpu().numpy() * 255).astype('uint8'))
     if bounce:
         images = images + list(reversed(images[1:-1]))
     imageio.mimsave(filename, images)
