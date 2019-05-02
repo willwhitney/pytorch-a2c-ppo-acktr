@@ -37,6 +37,7 @@ def update_current_obs(obs, current_obs, obs_shape, num_stack):
     obs = torch.from_numpy(obs).float()
     if num_stack > 1:
         current_obs[:, :-shape_dim0] = current_obs[:, shape_dim0:]
+    # import ipdb; ipdb.set_trace()
     current_obs[:, -shape_dim0:] = obs
 
 def serialize_opt(opt):

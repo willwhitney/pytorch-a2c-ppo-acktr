@@ -12,7 +12,8 @@ import torch.nn.functional as F
 import torch.optim as optim
 
 from baselines.common.vec_env.dummy_vec_env import DummyVecEnv
-from baselines.common.vec_env.subproc_vec_env import SubprocVecEnv
+# from baselines.common.vec_env.subproc_vec_env import SubprocVecEnv
+from vec_env.subproc_vec_env import SubprocVecEnv
 from baselines.common.vec_env.vec_normalize import VecNormalize
 
 from arguments import get_args
@@ -24,7 +25,7 @@ from utils import update_current_obs, write_options
 from visualize import visdom_plot
 import algo
 
-from pointmass import point_mass
+# from pointmass import point_mass
 from dummy_lookup import DummyLookup, ReverseDummyLookup, SpikyDummyLookup
 
 # from pyvirtualdisplay import Display
@@ -32,6 +33,7 @@ from dummy_lookup import DummyLookup, ReverseDummyLookup, SpikyDummyLookup
 # display_.start()
 
 # sys.path.insert(0, '../action-embedding')
+
 # import gridworld.grid_world_env
 # import gridworld
 args = get_args()
@@ -62,8 +64,7 @@ write_options(args, args.log_dir)
 def construct_envs(log_dir=args.log_dir, allow_reset=False):
     envs = [make_env(
                 args.env_name, args.seed, i, log_dir,
-                args.add_timestep,
-                allow_reset=allow_reset)
+                args.add_timestep, allow_reset=allow_reset, pixels=args.pixels)
             for i in range(args.num_processes)]
 
     if args.num_processes > 1:
@@ -148,6 +149,7 @@ def main():
                 tanh_mean=args.tanh_mean,
                 base_kwargs={'recurrent': args.recurrent_policy})
     actor_critic.to(device)
+    print(actor_critic)
 
     if isinstance(actor_critic, EmbeddedPolicy):
         action_shape = actor_critic.embedded_action_size
@@ -176,7 +178,7 @@ def main():
     current_obs = torch.zeros(args.num_processes, *obs_shape)
 
     obs = envs.reset()
-    update_current_obs(obs, current_obs, obs_shape, args.num_stack)
+    update_current_obs(obs, current_obs, envs.observation_space.shape, args.num_stack)
     rollouts.obs[0].copy_(current_obs)
 
     # These variables are used to compute average rewards for all processes.
@@ -231,7 +233,7 @@ def main():
             else:
                 current_obs *= masks
 
-            update_current_obs(obs, current_obs, obs_shape, args.num_stack)
+            update_current_obs(obs, current_obs, envs.observation_space.shape, args.num_stack)
             rollouts.insert(current_obs, recurrent_hidden_states, e_action,
                     action_log_prob, value, reward, masks)
 

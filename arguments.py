@@ -77,6 +77,7 @@ def get_args():
     parser.add_argument('--scale', type=float, default=0.1)
     parser.add_argument('--name', default="default")
     parser.add_argument('--render-interval', type=int, default=100)
+    parser.add_argument('--pixels', action='store_true')
     args = parser.parse_args()
 
     args.cuda = not args.no_cuda and torch.cuda.is_available()
